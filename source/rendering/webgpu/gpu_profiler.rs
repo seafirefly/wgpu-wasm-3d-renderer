@@ -5,7 +5,7 @@ use web_time::Instant;
 // Each render pass records one begin/end timestamp pair (2 x u64 = 16 bytes).
 const MAX_PASSES: u32 = 64;
 const PASS_BYTES: u64 = 16;
-pub const GROUP_COUNT: usize = 7;
+pub const GROUP_COUNT: usize = 8;
 
 /// Render pass categories shown in the Performance dialog. Passes in the same group are summed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,6 +14,7 @@ pub enum GpuPassGroup {
     BasePass,
     Lighting,
     Sky,
+    DepthOfField,
     Bloom,
     Composite,
     LineGrid,
@@ -25,6 +26,7 @@ impl GpuPassGroup {
         GpuPassGroup::BasePass,
         GpuPassGroup::Lighting,
         GpuPassGroup::Sky,
+        GpuPassGroup::DepthOfField,
         GpuPassGroup::Bloom,
         GpuPassGroup::Composite,
         GpuPassGroup::LineGrid,
@@ -36,6 +38,7 @@ impl GpuPassGroup {
             GpuPassGroup::BasePass => "Base pass",
             GpuPassGroup::Lighting => "Lighting",
             GpuPassGroup::Sky => "Sky",
+            GpuPassGroup::DepthOfField => "Depth of field",
             GpuPassGroup::Bloom => "Bloom",
             GpuPassGroup::Composite => "Composite",
             GpuPassGroup::LineGrid => "Line grid",

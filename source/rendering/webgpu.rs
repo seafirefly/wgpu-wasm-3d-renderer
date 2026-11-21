@@ -6,6 +6,7 @@ use wgpu::util::DeviceExt;
 
 pub mod bloom_shading;
 pub mod composite_shading;
+pub mod dof_shading;
 pub mod differed_shading;
 pub mod forward_shading;
 pub mod gpu_profiler;
@@ -68,6 +69,7 @@ pub struct WebGPUMeshRenderingResource {
 pub struct WebGPUUniqueResources {
     pub differed_shading_resource: Option<differed_shading::WebGPUDifferedShadingResource>,
     pub line_grid_shading_resource: Option<line_grid_shading::WebGPULineGridShadingResource>,
+    pub dof_shading_resource: Option<dof_shading::WebGPUDofShadingResource>,
     pub bloom_shading_resource: Option<bloom_shading::WebGPUbloomShadingResource>,
     pub composite_shading_resource: Option<composite_shading::WebGPUCompositeShadingResource>,
     pub hdr_convertion_resource: Option<hdr_convertion_shading::WebGPUHDREnvironmentResource>,
@@ -303,6 +305,18 @@ pub fn update_rendering_main(
         global_resources,
         &intermediate_view,
     );
+
+    // [Post-process] Depth of field pass
+    if scene.parameters.is_use_dof {
+        dof_shading::dof_pass(
+            interface,
+            scene,
+            &mut main_command_encoder,
+            &intermediate_view_2,
+            global_resources,
+        );
+        copy_intermediate_2_to_main(interface, &mut main_command_encoder);
+    }
 
     // [Post-process] Bloom pass
     if scene.parameters.is_use_bloom {

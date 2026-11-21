@@ -87,6 +87,7 @@ pub async fn main() {
     let mut global_resources: WebGPUUniqueResources = WebGPUUniqueResources {
         differed_shading_resource: None,
         line_grid_shading_resource: None,
+        dof_shading_resource: None,
         bloom_shading_resource: None,
         composite_shading_resource: None,
         sky_shading_resource: None,

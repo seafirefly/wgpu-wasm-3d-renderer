@@ -70,6 +70,9 @@ pub struct SceneParameter {
     // 0: off, 1: irradiance map, 2..=6: prefilter map mip 0..=4
     pub ibl_debug_type: u8,
     // postprocess
+    pub is_use_dof: bool,
+    pub dof_focus_distance: f32,
+    pub dof_aperture: f32,
     pub is_use_bloom: bool,
     pub bloom_threshold: f32,
     pub is_use_composite: bool,
@@ -223,6 +226,9 @@ impl SceneParameter {
             is_use_environment_map: true,
             ibl_debug_type: 0,
             // postprocess
+            is_use_dof: false,
+            dof_focus_distance: 8.0,
+            dof_aperture: 0.02,
             is_use_bloom: false,
             bloom_threshold: 1.5,
             is_use_composite: true,

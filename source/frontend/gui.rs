@@ -491,8 +491,47 @@ fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
 
 fn postprocess(parent: &web_sys::Element, scene: &Shared<Scene>) {
     let content = dialog(parent, "postprocess", "Postprocess");
+    dof(&content, scene);
     bloom(&content, scene);
     composite(&content, scene);
+}
+
+fn dof(parent: &web_sys::Element, scene: &Shared<Scene>) {
+    let content = accordion(parent, "dof", "Depth of Field", true);
+
+    let checked = scene.borrow().parameters.is_use_dof;
+    append(
+        &content,
+        &checkbox_row(scene, "Active", "dof-active", checked, |s, v| {
+            s.parameters.is_use_dof = v;
+        }),
+    );
+
+    let value = scene.borrow().parameters.dof_focus_distance;
+    let slider = Slider {
+        id: "dof-focus-range",
+        label: "Focus",
+        min: "0.5",
+        max: "20.0",
+        value,
+    };
+    append(
+        &content,
+        &slider_row(scene, slider, |s, v| s.parameters.dof_focus_distance = v),
+    );
+
+    let value = scene.borrow().parameters.dof_aperture;
+    let slider = Slider {
+        id: "dof-aperture-range",
+        label: "Aperture",
+        min: "0.0",
+        max: "0.1",
+        value,
+    };
+    append(
+        &content,
+        &slider_row(scene, slider, |s, v| s.parameters.dof_aperture = v),
+    );
 }
 
 fn bloom(parent: &web_sys::Element, scene: &Shared<Scene>) {
