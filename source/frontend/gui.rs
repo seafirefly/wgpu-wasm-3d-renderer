@@ -1,7 +1,8 @@
 mod widgets;
 
 use crate::engine::scene::{
-    CompositeViewTransform, Scene, SceneModel, ShadingType, SkyBoxType, ToneMappingType,
+    CompositeViewTransform, Scene, SceneModel, ShadingType, SkyBoxResolution, SkyBoxType,
+    ToneMappingType,
 };
 use crate::rendering::webgpu::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTimings};
 use crate::types::Shared;
@@ -38,9 +39,16 @@ const SCENE_MODELS: [(&str, SceneModel); 2] = [
     ("torus", SceneModel::Torus),
 ];
 
-const SKY_BOX_TYPES: [(&str, SkyBoxType); 2] = [
-    ("kloppenheim", SkyBoxType::Kloppenheim02),
-    ("shanghai", SkyBoxType::ShanghaiBund),
+const SKY_BOX_TYPES: [(&str, SkyBoxType); 3] = [
+    ("kloofendal", SkyBoxType::Kloofendal48dPartlyCloudy),
+    ("studio", SkyBoxType::StudioSmall09),
+    ("fireplace", SkyBoxType::Fireplace),
+];
+
+const SKY_BOX_RESOLUTIONS: [(&str, SkyBoxResolution); 3] = [
+    ("1k", SkyBoxResolution::R1k),
+    ("2k", SkyBoxResolution::R2k),
+    ("4k", SkyBoxResolution::R4k),
 ];
 
 const RENDER_TYPES: [(&str, ShadingType); 2] = [
@@ -443,6 +451,19 @@ fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
         s.parameters.requested_sky_box_type = Some(v);
     });
     append(&content, &widget_row("File", &[&value_wrapper(&sky_box)]));
+
+    let sky_box_resolution = select(
+        "sky-box-resolution-select",
+        &SKY_BOX_RESOLUTIONS,
+        Some(scene.borrow().parameters.sky_box_resolution),
+    );
+    on_select(scene, &sky_box_resolution, &SKY_BOX_RESOLUTIONS, |s, v| {
+        s.parameters.requested_sky_box_resolution = Some(v);
+    });
+    append(
+        &content,
+        &widget_row("Resolution", &[&value_wrapper(&sky_box_resolution)]),
+    );
 
     append(
         &content,

@@ -1,5 +1,6 @@
 use crate::engine::constant::{
-    GLTF_LOGO_PATH, GLTF_TORUS_PATH, HDR_KLOPPENHEIM_02, SHANGHAI_BUND,
+    GLTF_LOGO_PATH, GLTF_TORUS_PATH, HDR_FIREPLACE, HDR_KLOOFENDAL_48D_PARTLY_CLOUDY,
+    HDR_STUDIO_SMALL_09,
 };
 use crate::types::Shared;
 use crate::{frontend, rendering};
@@ -63,6 +64,8 @@ pub struct SceneParameter {
     pub is_use_sky_box: bool,
     pub sky_box_type: SkyBoxType,
     pub requested_sky_box_type: Option<SkyBoxType>,
+    pub sky_box_resolution: SkyBoxResolution,
+    pub requested_sky_box_resolution: Option<SkyBoxResolution>,
     pub is_use_environment_map: bool,
     // 0: off, 1: irradiance map, 2..=6: prefilter map mip 0..=4
     pub ibl_debug_type: u8,
@@ -104,15 +107,36 @@ impl SceneModel {
 #[derive(Clone, Copy, Default, PartialEq)]
 pub enum SkyBoxType {
     #[default]
-    Kloppenheim02,
-    ShanghaiBund,
+    Kloofendal48dPartlyCloudy,
+    StudioSmall09,
+    Fireplace,
 }
 
 impl SkyBoxType {
-    pub fn path(self) -> &'static str {
+    pub fn path(self, resolution: SkyBoxResolution) -> String {
+        let stem = match self {
+            SkyBoxType::Kloofendal48dPartlyCloudy => HDR_KLOOFENDAL_48D_PARTLY_CLOUDY,
+            SkyBoxType::StudioSmall09 => HDR_STUDIO_SMALL_09,
+            SkyBoxType::Fireplace => HDR_FIREPLACE,
+        };
+        format!("{}_{}.hdr", stem, resolution.suffix())
+    }
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum SkyBoxResolution {
+    R1k,
+    R2k,
+    #[default]
+    R4k,
+}
+
+impl SkyBoxResolution {
+    pub fn suffix(self) -> &'static str {
         match self {
-            SkyBoxType::Kloppenheim02 => HDR_KLOPPENHEIM_02,
-            SkyBoxType::ShanghaiBund => SHANGHAI_BUND,
+            SkyBoxResolution::R1k => "1k",
+            SkyBoxResolution::R2k => "2k",
+            SkyBoxResolution::R4k => "4k",
         }
     }
 }
@@ -194,6 +218,8 @@ impl SceneParameter {
             is_use_sky_box: true,
             sky_box_type: SkyBoxType::default(),
             requested_sky_box_type: None,
+            sky_box_resolution: SkyBoxResolution::default(),
+            requested_sky_box_resolution: None,
             is_use_environment_map: true,
             ibl_debug_type: 0,
             // postprocess

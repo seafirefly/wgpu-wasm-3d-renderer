@@ -1,23 +1,36 @@
 use wgpu::util::DeviceExt;
 
-use crate::engine::{self, scene::SkyBoxType};
+use crate::engine::{
+    self,
+    scene::{SkyBoxResolution, SkyBoxType},
+};
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources};
 use crate::types::Shared;
 
 // Sky box selection ------------------------------------------------------------------------------------------
 
-// Applies a sky box change requested from the GUI. The HDR is reloaded and converted by the next pass.
+// Applies a sky box or resolution change requested from the GUI. The HDR is reloaded and converted by the next pass.
 pub fn update_sky_box(
     scene: &Shared<engine::scene::Scene>,
     global_resources: &mut WebGPUUniqueResources,
 ) {
-    let Some(sky_box_type) = scene.borrow_mut().parameters.requested_sky_box_type.take() else {
-        return;
-    };
-    if sky_box_type == scene.borrow().parameters.sky_box_type {
+    let mut scene = scene.borrow_mut();
+    let parameters = &mut scene.parameters;
+    let sky_box_type = parameters
+        .requested_sky_box_type
+        .take()
+        .unwrap_or(parameters.sky_box_type);
+    let sky_box_resolution = parameters
+        .requested_sky_box_resolution
+        .take()
+        .unwrap_or(parameters.sky_box_resolution);
+    if sky_box_type == parameters.sky_box_type
+        && sky_box_resolution == parameters.sky_box_resolution
+    {
         return;
     }
-    scene.borrow_mut().parameters.sky_box_type = sky_box_type;
+    parameters.sky_box_type = sky_box_type;
+    parameters.sky_box_resolution = sky_box_resolution;
 
     global_resources.hdr_convertion_resource = None;
     global_resources.differed_shading_resource = None;
@@ -25,6 +38,7 @@ pub fn update_sky_box(
     *global_resources.sky_hdr_image.borrow_mut() = None;
     global_resources.sky_hdr_load_started = false;
 }
+
 
 // HDR conversion pass --------------------------------------------------------------------------------------
 
@@ -38,13 +52,16 @@ pub fn hdr_convertion_pass(
     let is_first_update = global_resources.hdr_convertion_resource.is_none();
     if is_first_update {
         let sky_box_type = scene.parameters.sky_box_type;
+        let sky_box_resolution = scene.parameters.sky_box_resolution;
 
         // Discard an image loaded for a sky box that is no longer selected (its load may have finished late)
         let is_stale = global_resources
             .sky_hdr_image
             .borrow()
             .as_ref()
-            .is_some_and(|image| image.sky_box_type != sky_box_type);
+            .is_some_and(|image| {
+                image.sky_box_type != sky_box_type || image.sky_box_resolution != sky_box_resolution
+            });
         if is_stale {
             *global_resources.sky_hdr_image.borrow_mut() = None;
             global_resources.sky_hdr_load_started = false;
@@ -56,12 +73,14 @@ pub fn hdr_convertion_pass(
             let sky_hdr_image = global_resources.sky_hdr_image.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let (data, width, height) =
-                    engine::asset_loader::load_hdr_file(sky_box_type.path()).await;
+                    engine::asset_loader::load_hdr_file(&sky_box_type.path(sky_box_resolution))
+                        .await;
                 *sky_hdr_image.borrow_mut() = Some(SkyHdrImage {
                     data,
                     width,
                     height,
                     sky_box_type,
+                    sky_box_resolution,
                 });
             });
             return;
@@ -259,6 +278,7 @@ pub struct SkyHdrImage {
     pub width: u32,
     pub height: u32,
     pub sky_box_type: SkyBoxType,
+    pub sky_box_resolution: SkyBoxResolution,
 }
 
 pub struct WebGPUHDREnvironmentResource {

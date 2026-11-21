@@ -343,7 +343,7 @@ pub async fn load_hdr_file(file_name: &str) -> (Vec<half::f16>, u32, u32) {
 
     let f16_data: Vec<half::f16> = f32_data
         .into_iter()
-        .map(|&value| half::f16::from_f32(value))
+        .map(|&value| half::f16::from_f32(value.min(half::f16::MAX.to_f32())))
         .collect();
 
     let mut rgba_data = Vec::with_capacity((metadata.width * metadata.height * 4) as usize);
