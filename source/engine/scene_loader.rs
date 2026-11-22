@@ -68,7 +68,7 @@ fn apply_loaded_scene(
         let scene_value = scene.borrow();
         (scene_value.objects.len(), scene_value.materials.len())
     };
-    frontend::gui::update_scene_statistics(object_count, material_count);
+    frontend::control_panel::update_scene_statistics(object_count, material_count);
 }
 
 /// Applies a finished scene load, then starts loading the model requested from the GUI (if any).

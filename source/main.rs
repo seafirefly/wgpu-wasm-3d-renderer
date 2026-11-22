@@ -37,7 +37,7 @@ impl PerformanceMetrics {
 
         let average_frame_time_ms = self.total_frame_time_ms / self.frame_count as f64;
         let frames_per_second = self.frame_count as f64 * 1000.0 / sample_duration_ms;
-        frontend::gui::update_performance_statistics(average_frame_time_ms, frames_per_second);
+        frontend::control_panel::update_performance_statistics(average_frame_time_ms, frames_per_second);
 
         self.sample_started_at = now;
         self.total_frame_time_ms = 0.0;
@@ -99,13 +99,13 @@ pub async fn main() {
     };
 
     // Initialize control response JS object and event listener
-    let control_response_js: Shared<frontend::eventlistener::ControlResponseJs> = Shared::new(
-        RefCell::new(frontend::eventlistener::ControlResponseJs::default()),
+    let control_response_js: Shared<frontend::event_listener::ControlResponseJs> = Shared::new(
+        RefCell::new(frontend::event_listener::ControlResponseJs::default()),
     );
-    frontend::eventlistener::add_event_listener_control(&control_response_js);
+    frontend::event_listener::add_event_listener_control(&control_response_js);
 
     // Create frontend gui interface
-    frontend::gui::create_frontend_gui(&scene);
+    frontend::control_panel::create_control_panel(&scene);
 
     // Scene model switching state shared with the async glTF loading task
     let scene_load_slot: Shared<SceneLoadSlot> = Shared::new(RefCell::new(SceneLoadSlot::default()));
@@ -124,7 +124,7 @@ pub async fn main() {
         engine::scene::update_camera_control(&scene, &control_response_js);
         {
             let scene_value = scene.borrow();
-            frontend::gui::update_camera_controls(
+            frontend::control_panel::update_camera_controls(
                 scene_value.parameters.eye_location,
                 scene_value.parameters.eye_direction,
             );
@@ -145,7 +145,7 @@ pub async fn main() {
         }
         let frame_finished_at = performance.now();
         if performance_metrics.record_frame(frame_finished_at - frame_started_at, frame_finished_at) {
-            frontend::gui::update_gpu_statistics(
+            frontend::control_panel::update_gpu_statistics(
                 webgpu_interface.gpu_profiler.is_supported(),
                 webgpu_interface.gpu_profiler.latest_timings(),
                 webgpu_interface.gpu_profiler.cpu_timings(),

@@ -335,7 +335,7 @@ pub fn batch_objects(scene: &Shared<Scene>) {
 
 pub fn update_camera_control(
     scene: &Shared<Scene>,
-    in_control_event: &Shared<frontend::eventlistener::ControlResponseJs>,
+    in_control_event: &Shared<frontend::event_listener::ControlResponseJs>,
 ) {
     let mut scene_value = scene.borrow_mut();
     let mut eye: glam::Vec3 = scene_value.parameters.eye_location;

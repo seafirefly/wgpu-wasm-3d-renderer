@@ -1,13 +1,14 @@
-mod widgets;
-
 use crate::engine::scene::{
     CompositeViewTransform, Scene, SceneModel, ShadingType, SkyBoxResolution, SkyBoxType,
     ToneMappingType,
 };
 use crate::rendering::webgpu::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTimings};
 use crate::types::Shared;
+use super::ui_elements::{
+    accordion, append, checkbox_row, color_picker, dialog, div, element, on_select, select,
+    slider_row, stat_row, value_wrapper, widget_row, Slider,
+};
 use wasm_bindgen::JsCast;
-use widgets::*;
 
 const DIRECTIONAL_AXES: [(&str, &str); 3] = [
     ("directional-range-x", "X"),
@@ -91,8 +92,8 @@ const VIEW_TRANSFORMS: [(&str, CompositeViewTransform); 3] = [
     ("filmic", CompositeViewTransform::Filmic),
 ];
 
-pub fn create_frontend_gui(scene: &Shared<Scene>) {
-    let wrapper = widgets::element("div");
+pub fn create_control_panel(scene: &Shared<Scene>) {
+    let wrapper = element("div");
     wrapper.set_id("dialog-wrapper");
 
     environment(&wrapper, scene);
