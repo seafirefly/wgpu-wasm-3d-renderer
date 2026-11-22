@@ -57,7 +57,7 @@ trunk serve --config Trunk.debug.toml
 The `resource/public/gltf/cornell_box` scene is a PBRT-to-glTF conversion of the Cornell Box from [Benedikt Bitterli Rendering Resources](https://benedikt-bitterli.me/resources/).
 
 - Source scene: PBRT v4 version
-- Files: `cornell_box_core.gltf`, `cornell_box_extended.gltf`, `cornell_box.bin`
+- Files: `cornell_box_extended.gltf` (used by the renderer), `cornell_box_core.gltf`, `cornell_box.bin`
 - License: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
 - License notice: [`resource/public/gltf/cornell_box/LICENSE.txt`](resource/public/gltf/cornell_box/LICENSE.txt)
 

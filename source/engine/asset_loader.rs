@@ -174,7 +174,8 @@ pub async fn load_gltf_scene(
     let gltf_cursor: std::io::Cursor<String> = std::io::Cursor::new(gltf_text);
     let gltf_reader: std::io::BufReader<_> = std::io::BufReader::new(gltf_cursor);
 
-    let gltf: gltf::Gltf = gltf::Gltf::from_reader(gltf_reader).unwrap_or_else(|error| {
+    // gltf-json 1.4.1 does not list KHR_materials_specular in its enabled extensions
+    let gltf: gltf::Gltf = gltf::Gltf::from_reader_without_validation(gltf_reader).unwrap_or_else(|error| {
         panic!(
             "Failed to parse .gltf `{file_name}`: {error}; response preview: {:?}",
             gltf_preview
