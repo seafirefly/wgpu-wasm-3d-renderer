@@ -250,12 +250,7 @@ pub fn compute_light_view_projection(scene: &engine::scene::Scene) -> glam::Mat4
     .normalize_or_zero();
 
     if directional.length_squared() <= 0.000001 {
-        directional = glam::Vec3::new(0.5, 1.0, -1.0).normalize();
-    }
-
-    if scene_value.parameters.is_convert_y_to_z {
-        let y_to_z_rot = glam::Mat3::from_axis_angle(glam::Vec3::X, std::f32::consts::PI / 2.0);
-        directional = (y_to_z_rot * directional).normalize_or_zero();
+        directional = glam::Vec3::new(-0.5, -1.0, -1.0).normalize();
     }
 
     let eye = scene_value.parameters.eye_location;

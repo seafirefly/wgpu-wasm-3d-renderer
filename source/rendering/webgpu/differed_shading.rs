@@ -971,12 +971,8 @@ fn update_differed_shading_buffer(
 
     let eye: glam::Vec3 = scene_value.parameters.eye_location;
 
-    let mut directional_angle =
+    let directional_angle =
         glam::Vec3::from_array(scene_value.parameters.light_parameters.directional_light_angle);
-    if scene_value.parameters.is_convert_y_to_z {
-        let y_to_z_rot = glam::Mat3::from_axis_angle(glam::Vec3::X, std::f32::consts::PI / 2.0);
-        directional_angle = y_to_z_rot * directional_angle;
-    }
     let directional_intensity: f32 = scene_value.parameters.light_parameters.directional_light_intensity;
     let ambient: [f32; 4] = scene_value.parameters.light_parameters.ambient_light_color;
     let camera_position: [f32; 4] = [eye.x, eye.y, eye.z, 1.0];

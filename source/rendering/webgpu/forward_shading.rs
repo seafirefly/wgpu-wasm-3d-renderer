@@ -622,12 +622,8 @@ fn update_forward_pbr_shading_resource(
             );
         let transform_matrix: glam::Mat4 = projection_matrix * view_matrix * model_matrix;
 
-        let mut directional =
+        let directional =
             glam::Vec3::from_array(scene_value.parameters.light_parameters.directional_light_angle);
-        if scene_value.parameters.is_convert_y_to_z {
-            let y_to_z_rot = glam::Mat3::from_axis_angle(glam::Vec3::X, std::f32::consts::PI / 2.0);
-            directional = y_to_z_rot * directional;
-        }
         let ambient: [f32; 4] = scene_value.parameters.light_parameters.ambient_light_color;
         let inverse_projection: glam::Mat4 = transform_matrix.inverse();
 
