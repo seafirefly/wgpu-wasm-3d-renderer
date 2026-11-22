@@ -67,6 +67,11 @@ pub struct SceneParameter {
     pub sky_box_resolution: SkyBoxResolution,
     pub requested_sky_box_resolution: Option<SkyBoxResolution>,
     pub is_use_environment_map: bool,
+    // environment pass: diffuse / specular environment lighting (with SSR) applied after the deferred lighting
+    pub is_use_environment_pass: bool,
+    pub is_use_ssr: bool,
+    pub is_use_ibl_diffuse: bool,
+    pub is_use_ibl_specular: bool,
     // 0: off, 1: irradiance map, 2..=6: prefilter map mip 0..=4
     pub ibl_debug_type: u8,
     // postprocess
@@ -224,8 +229,11 @@ impl SceneParameter {
             sky_box_resolution: SkyBoxResolution::default(),
             requested_sky_box_resolution: None,
             is_use_environment_map: true,
+            is_use_environment_pass: true,
+            is_use_ssr: true,
+            is_use_ibl_diffuse: true,
+            is_use_ibl_specular: true,
             ibl_debug_type: 0,
-            // postprocess
             is_use_dof: false,
             dof_focus_distance: 8.0,
             dof_aperture: 0.02,

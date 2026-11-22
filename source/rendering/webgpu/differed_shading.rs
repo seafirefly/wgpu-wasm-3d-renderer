@@ -129,9 +129,6 @@ pub fn differed_shading_pass(
         {
             let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Lighting);
             let is_debug_out = scene.parameters.differed_debug_type != 0;
-            let is_use_ibl = scene.parameters.is_use_sky_box
-                && scene.parameters.is_use_environment_map
-                && dsr.ibl_render_pipeline.is_some();
 
             // render pass setup
             let mut differed_shading_pass: wgpu::RenderPass<'_> = command_encoder
@@ -159,16 +156,13 @@ pub fn differed_shading_pass(
 
             let pipeline = if is_debug_out {
                 &dsr.debug_pipeline
-            } else if is_use_ibl {
-                dsr.ibl_render_pipeline.as_ref().unwrap()
             } else {
                 &dsr.render_pipeline
             };
             differed_shading_pass.set_pipeline(pipeline);
 
-            // IBL bind group (3) is only used by the IBL pipeline
-            let bind_group_count = if is_use_ibl { 4 } else { 3 };
-            for (index, bind_group) in dsr.bind_groups.iter().take(bind_group_count).enumerate() {
+            // IBL lighting is handled by the environment pass, so only the deferred bind groups are used
+            for (index, bind_group) in dsr.bind_groups.iter().take(3).enumerate() {
                 differed_shading_pass.set_bind_group(index as u32, bind_group, &[]);
             }
 
@@ -181,12 +175,12 @@ pub fn differed_shading_pass(
 // Differed shading context ---------------------------------------------------------------------------------
 pub struct WebGPUDifferedShadingResource {
     pub _shader: wgpu::ShaderModule,
-    gbuffer_views: [wgpu::TextureView; 4],
+    pub gbuffer_views: [wgpu::TextureView; 4],
     pub bind_groups: Vec<wgpu::BindGroup>,
     pub uniform_buf: wgpu::Buffer,
     pub render_pipeline: wgpu::RenderPipeline,
     pub debug_pipeline: wgpu::RenderPipeline,
-    pub ibl_render_pipeline: Option<wgpu::RenderPipeline>,
+    pub ibl_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 pub fn create_differed_gbuffer_shader_context(interface: &WebGPUInterface) -> WebGPUShaderContext {
@@ -384,7 +378,7 @@ entry_point: Some(common::FS_ENTRY_POINT),
     };
 }
 
-fn get_canvas_size() -> (u32, u32) {
+pub fn get_canvas_size() -> (u32, u32) {
     let canvas: web_sys::Element = gloo::utils::document()
         .get_element_by_id(constant::CANVAS_ELEMENT_ID)
         .expect("Failed to get canvas element");
@@ -857,139 +851,104 @@ fn create_differed_shading_context(
     bind_groups.push(uniform_bind_group);
     bind_groups.push(shadow_bind_group);
 
-    // ibl context
-    let mut ibl_render_pipeline: Option<wgpu::RenderPipeline> = None;
-    if global_resources.hdr_convertion_resource.is_some() {
-        let ibl_sampler = interface.device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("IBL Sampler"),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
+    // ibl context: without an HDR environment, 1x1 dummy cube maps keep the layout valid for the environment pass
+    let ibl_sampler = interface.device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("IBL Sampler"),
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Linear,
+        ..Default::default()
+    });
+
+    let ibl_bind_group_layout = interface
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("IBL Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::Cube,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::Cube,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
         });
 
-        let ibl_bind_group_layout =
-            interface
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("IBL Bind Group Layout"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                multisampled: false,
-                                view_dimension: wgpu::TextureViewDimension::Cube,
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                multisampled: false,
-                                view_dimension: wgpu::TextureViewDimension::Cube,
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                });
-
-        let ibl_bind_group = interface
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("IBL Bind Group"),
-                layout: &ibl_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(
-                            &global_resources
-                                .hdr_convertion_resource
-                                .as_ref()
-                                .unwrap()
-                                .irradiance_map
-                                .create_view(&wgpu::TextureViewDescriptor {
-                                    label: Some("Cube Sample View"),
-                                    dimension: Some(wgpu::TextureViewDimension::Cube),
-                                    ..Default::default()
-                                }),
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(
-                            &global_resources
-                                .hdr_convertion_resource
-                                .as_ref()
-                                .unwrap()
-                                .prefilter_map
-                                .create_view(&wgpu::TextureViewDescriptor {
-                                    label: Some("Cube Sample View"),
-                                    dimension: Some(wgpu::TextureViewDimension::Cube),
-                                    ..Default::default()
-                                }),
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Sampler(&ibl_sampler),
-                    },
-                ],
+    let dummy_ibl_map: wgpu::Texture;
+    let (irradiance_source, prefilter_source) = match global_resources.hdr_convertion_resource.as_ref()
+    {
+        Some(hdr) => (&hdr.irradiance_map, &hdr.prefilter_map),
+        None => {
+            dummy_ibl_map = interface.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Dummy IBL Cube Map"),
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 6,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
             });
+            (&dummy_ibl_map, &dummy_ibl_map)
+        }
+    };
 
-        bind_groups.push(ibl_bind_group);
+    let cube_view = |texture: &wgpu::Texture| {
+        texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("Cube Sample View"),
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            ..Default::default()
+        })
+    };
+    let irradiance_view = cube_view(irradiance_source);
+    let prefilter_view = cube_view(prefilter_source);
 
-        let ibl_piepeline_layout =
-            interface
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("IBL Pipeline Layout"),
-                    bind_group_layouts: &[
-                        &gbuffer_bind_group_layout,
-                        &uniform_bind_group_layout,
-                        &shadow_bind_group_layout,
-                        &ibl_bind_group_layout,
-                    ],
-                    push_constant_ranges: &[],
-                });
-
-        ibl_render_pipeline = Some(interface.device.create_render_pipeline(
-            &wgpu::RenderPipelineDescriptor {
-                label: Some("IBL Render Pipeline"),
-                layout: Some(&ibl_piepeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some(common::VS_ENTRY_POINT),
-                    compilation_options: Default::default(),
-                    buffers: &[],
+    let ibl_bind_group = interface
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("IBL Bind Group"),
+            layout: &ibl_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&irradiance_view),
                 },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some("fs_ibl_main"),
-                    compilation_options: Default::default(),
-                    targets: &[Some(interface.intermediate_texture.format().into())],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(WEBGPU_CULL_MODE),
-                    ..Default::default()
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&prefilter_view),
                 },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-                cache: None,
-            },
-        ));
-    }
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&ibl_sampler),
+                },
+            ],
+        });
+
+    bind_groups.push(ibl_bind_group);
 
     return WebGPUDifferedShadingResource {
         _shader: shader,
@@ -998,7 +957,7 @@ fn create_differed_shading_context(
         uniform_buf,
         render_pipeline,
         debug_pipeline,
-        ibl_render_pipeline,
+        ibl_bind_group_layout,
     };
 }
 

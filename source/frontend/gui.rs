@@ -98,6 +98,7 @@ pub fn create_frontend_gui(scene: &Shared<Scene>) {
     environment(&wrapper, scene);
     camera(&wrapper, scene);
     base_pass(&wrapper, scene);
+    environment_pass(&wrapper, scene);
     skybox(&wrapper, scene);
     postprocess(&wrapper, scene);
     overlay(&wrapper, scene);
@@ -217,7 +218,7 @@ fn cpu_pass_row_id(index: usize) -> String {
 }
 
 fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
-    let content = dialog(parent, "environment", "Environment");
+    let content = dialog(parent, "world", "World");
 
     let model = select(
         "scene-model-select",
@@ -489,6 +490,42 @@ fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
     append(&content, &widget_row("IBL out", &[&value_wrapper(&ibl_debug)]));
 }
 
+fn environment_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
+    let content = dialog(parent, "environment-pass", "Environment pass");
+
+    let checked = scene.borrow().parameters.is_use_environment_pass;
+    append(
+        &content,
+        &checkbox_row(scene, "Active", "environment-pass-active", checked, |s, v| {
+            s.parameters.is_use_environment_pass = v;
+        }),
+    );
+
+    let checked = scene.borrow().parameters.is_use_ibl_diffuse;
+    append(
+        &content,
+        &checkbox_row(scene, "IBL diffuse", "ibl-diffuse-active", checked, |s, v| {
+            s.parameters.is_use_ibl_diffuse = v;
+        }),
+    );
+
+    let checked = scene.borrow().parameters.is_use_ibl_specular;
+    append(
+        &content,
+        &checkbox_row(scene, "IBL specular", "ibl-specular-active", checked, |s, v| {
+            s.parameters.is_use_ibl_specular = v;
+        }),
+    );
+
+    let checked = scene.borrow().parameters.is_use_ssr;
+    append(
+        &content,
+        &checkbox_row(scene, "SSR", "ssr-active", checked, |s, v| {
+            s.parameters.is_use_ssr = v;
+        }),
+    );
+}
+
 fn postprocess(parent: &web_sys::Element, scene: &Shared<Scene>) {
     let content = dialog(parent, "postprocess", "Postprocess");
     dof(&content, scene);
@@ -721,25 +758,17 @@ fn performance(parent: &web_sys::Element) {
     for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
         append(
             &cpu,
-            &stat_row(
-                &format!("CPU {}", group.label()),
-                &cpu_pass_row_id(index),
-                0,
-            ),
+            &stat_row(group.label(), &cpu_pass_row_id(index), 0),
         );
     }
-    append(&cpu, &stat_row("CPU total", CPU_TOTAL_ROW_ID, 0));
+    append(&cpu, &stat_row("Total", CPU_TOTAL_ROW_ID, 0));
 
     let gpu = accordion(&content, "performance-gpu", "GPU", true);
     for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
         append(
             &gpu,
-            &stat_row(
-                &format!("GPU {}", group.label()),
-                &gpu_pass_row_id(index),
-                0,
-            ),
+            &stat_row(group.label(), &gpu_pass_row_id(index), 0),
         );
     }
-    append(&gpu, &stat_row("GPU total", GPU_TOTAL_ROW_ID, 0));
+    append(&gpu, &stat_row("Total", GPU_TOTAL_ROW_ID, 0));
 }

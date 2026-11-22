@@ -8,6 +8,7 @@ pub mod bloom_shading;
 pub mod composite_shading;
 pub mod dof_shading;
 pub mod differed_shading;
+pub mod environment_shading;
 pub mod forward_shading;
 pub mod gpu_profiler;
 pub mod hdr_convertion_shading;
@@ -76,6 +77,7 @@ pub struct WebGPUUniqueResources {
     pub sky_hdr_image: Shared<Option<hdr_convertion_shading::SkyHdrImage>>,
     pub sky_hdr_load_started: bool,
     pub sky_shading_resource: Option<sky_shading::WebGPUSkyShadingResource>,
+    pub environment_shading_resource: Option<environment_shading::WebGPUEnvironmentShadingResource>,
     pub shadow_resource: Option<shadow::WebGPUShadowResource>,
 }
 
@@ -287,6 +289,20 @@ pub fn update_rendering_main(
         }
     }
 
+    // [Environment] Diffuse and specular environment lighting (SSR first, prefiltered map as fallback)
+    let is_environment_pass = global_resources.differed_shading_resource.is_some()
+        && environment_shading::is_environment_pass_active(scene);
+    if is_environment_pass {
+        environment_shading::environment_shading_pass(
+            interface,
+            scene,
+            &mut main_command_encoder,
+            global_resources,
+        );
+        copy_intermediate_2_to_main(interface, &mut main_command_encoder);
+    }
+
+    // [Sky] Composited after lighting; fills background pixels where depth is far
     if scene.parameters.is_use_sky_box {
         sky_shading::sky_pass(
             interface,

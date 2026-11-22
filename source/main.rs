@@ -91,6 +91,7 @@ pub async fn main() {
         bloom_shading_resource: None,
         composite_shading_resource: None,
         sky_shading_resource: None,
+        environment_shading_resource: None,
         hdr_convertion_resource: None,
         sky_hdr_image: Shared::new(RefCell::new(None)),
         sky_hdr_load_started: false,
