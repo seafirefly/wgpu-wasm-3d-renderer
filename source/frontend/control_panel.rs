@@ -35,10 +35,16 @@ const AMBIENT_CHANNELS: [(&str, &str, &str, &str, usize); 4] = [
     ("ambient-range-intensity", "Intensity", "0.0", "10.0", 3),
 ];
 
-const SCENE_MODELS: [(&str, SceneModel); 2] = [
-    ("gltf_logo", SceneModel::GltfLogo),
+#[cfg(debug_assertions)]
+const SCENE_MODELS: [(&str, SceneModel); 3] = [
+    ("cornell_box", SceneModel::CornellBox),
     ("torus", SceneModel::Torus),
+    ("gltf_logo", SceneModel::GltfLogo),
 ];
+
+#[cfg(not(debug_assertions))]
+const SCENE_MODELS: [(&str, SceneModel); 1] =
+    [("cornell_box", SceneModel::CornellBox)];
 
 const SKY_BOX_TYPES: [(&str, SkyBoxType); 3] = [
     ("kloofendal", SkyBoxType::Kloofendal48dPartlyCloudy),
@@ -46,10 +52,16 @@ const SKY_BOX_TYPES: [(&str, SkyBoxType); 3] = [
     ("fireplace", SkyBoxType::Fireplace),
 ];
 
+#[cfg(debug_assertions)]
 const SKY_BOX_RESOLUTIONS: [(&str, SkyBoxResolution); 3] = [
     ("1k", SkyBoxResolution::R1k),
     ("2k", SkyBoxResolution::R2k),
     ("4k", SkyBoxResolution::R4k),
+];
+
+#[cfg(not(debug_assertions))]
+const SKY_BOX_RESOLUTIONS: [(&str, SkyBoxResolution); 1] = [
+    ("1k", SkyBoxResolution::R1k),
 ];
 
 const RENDER_TYPES: [(&str, ShadingType); 2] = [

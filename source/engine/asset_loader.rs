@@ -10,10 +10,16 @@ pub fn format_url(file_name: &str) -> reqwest::Url {
     let window = web_sys::window().unwrap();
     let location = window.location();
     let origin = location.origin().unwrap();
-    /*if !origin.ends_with("learn-wgpu") {
-        origin = format!("{}/learn-wgpu", origin);
-    }*/
-    let base = reqwest::Url::parse(&format!("{}/", origin,)).unwrap();
+    let pathname = location.pathname().unwrap();
+    let base_path = if pathname.ends_with('/') {
+        pathname
+    } else if let Some(last_slash) = pathname.rfind('/') {
+        let (directory, _) = pathname.split_at(last_slash);
+        format!("{directory}/")
+    } else {
+        "/".to_string()
+    };
+    let base = reqwest::Url::parse(&format!("{origin}{base_path}")).unwrap();
     base.join(file_name).unwrap()
 }
 
@@ -31,10 +37,11 @@ pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             let url = format_url(file_name);
-            let txt = reqwest::get(url)
-                .await?
-                .text()
-                .await?;
+            let response = reqwest::get(url.clone()).await?;
+            if !response.status().is_success() {
+                anyhow::bail!("Failed to load {}: HTTP {}", url, response.status());
+            }
+            let txt = response.text().await?;
         } else {
             let path = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR not set"))
                 .join("res")
@@ -51,11 +58,11 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             let url = format_url(file_name);
-            let data = reqwest::get(url)
-                .await?
-                .bytes()
-                .await?
-                .to_vec();
+            let response = reqwest::get(url.clone()).await?;
+            if !response.status().is_success() {
+                anyhow::bail!("Failed to load {}: HTTP {}", url, response.status());
+            }
+            let data = response.bytes().await?.to_vec();
             //log::debug!("Load {} byte from {}", data.len(), file_name);
         } else {
             let path = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR not set"))
@@ -162,11 +169,17 @@ pub async fn load_gltf_scene(
 ) {
     let gltf_text = load_string(file_name)
         .await
-        .expect("Failed to parse .gltf file path string");
+        .unwrap_or_else(|error| panic!("Failed to load .gltf `{file_name}`: {error}"));
+    let gltf_preview = gltf_text.chars().take(80).collect::<String>();
     let gltf_cursor: std::io::Cursor<String> = std::io::Cursor::new(gltf_text);
     let gltf_reader: std::io::BufReader<_> = std::io::BufReader::new(gltf_cursor);
 
-    let gltf: gltf::Gltf = gltf::Gltf::from_reader(gltf_reader).expect("Failed to read .gltf file");
+    let gltf: gltf::Gltf = gltf::Gltf::from_reader(gltf_reader).unwrap_or_else(|error| {
+        panic!(
+            "Failed to parse .gltf `{file_name}`: {error}; response preview: {:?}",
+            gltf_preview
+        )
+    });
     let mut buffer_data: Vec<Vec<u8>> = Vec::new();
 
     let slash_num: usize = file_name.rfind("/").unwrap() + 1;

@@ -30,7 +30,35 @@ Resources used in this project:
 ### Assets and Data
 
 - [McGuire Computer Graphics Archive](https://casual-effects.com/data/) - Test models for computer graphics
-- [Sketchfab](https://sketchfab.com/) - 3D models
 - [Poly Haven](https://polyhaven.com/) - 3D models, HDRIs, and textures (CC0)
+- [Benedikt Bitterli Rendering Resources](https://benedikt-bitterli.me/resources/) - Cornell Box scene
 
-Assets from Poly Haven are released under CC0. Sketchfab models have individual licenses, so please check the license on each model's page.
+Assets from Poly Haven are released under CC0.
+
+### Resource directories
+
+- `resource/public/`: resources approved for distribution in the public repository
+- `resource/private/`: local-only resources that must not be committed
+
+Only `resource/public/` is copied into the browser build. Resources in `resource/private/` are ignored by Git. Asset-specific license notices are kept beside each public resource.
+
+### Debug resources
+
+Public builds use `trunk build` or `trunk build --release` with `Trunk.toml`.
+
+Private debug resources are available only with:
+
+```sh
+trunk serve --config Trunk.debug.toml
+```
+
+### Cornell Box
+
+The `resource/public/gltf/cornell_box` scene is a PBRT-to-glTF conversion of the Cornell Box from [Benedikt Bitterli Rendering Resources](https://benedikt-bitterli.me/resources/).
+
+- Source scene: PBRT v4 version
+- Files: `cornell_box_core.gltf`, `cornell_box_extended.gltf`, `cornell_box.bin`
+- License: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
+- License notice: [`resource/public/gltf/cornell_box/LICENSE.txt`](resource/public/gltf/cornell_box/LICENSE.txt)
+
+The source scene is stated by its original distributor to be in the public domain under CC0. CC0 allows copying, modification, commercial use, and redistribution without permission or attribution. Attribution is encouraged. The scene is therefore suitable for publication in this public repository. The license notice must remain with redistributed copies.

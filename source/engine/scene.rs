@@ -1,7 +1,9 @@
 use crate::engine::constant::{
-    GLTF_LOGO_PATH, GLTF_TORUS_PATH, HDR_FIREPLACE, HDR_KLOOFENDAL_48D_PARTLY_CLOUDY,
-    HDR_STUDIO_SMALL_09,
+    GLTF_CORNELL_BOX_PATH, HDR_FIREPLACE,
+    HDR_KLOOFENDAL_48D_PARTLY_CLOUDY, HDR_STUDIO_SMALL_09,
 };
+#[cfg(debug_assertions)]
+use crate::engine::constant::{GLTF_LOGO_PATH, GLTF_TORUS_PATH};
 use crate::types::Shared;
 use crate::{frontend, rendering};
 
@@ -98,15 +100,21 @@ pub struct SceneParameter {
 
 #[derive(Clone, Copy, Default, PartialEq)]
 pub enum SceneModel {
-    Torus,
     #[default]
+    CornellBox,
+    #[cfg(debug_assertions)]
+    Torus,
+    #[cfg(debug_assertions)]
     GltfLogo,
 }
 
 impl SceneModel {
     pub fn path(self) -> &'static str {
         match self {
+            #[cfg(debug_assertions)]
             SceneModel::Torus => GLTF_TORUS_PATH,
+            SceneModel::CornellBox => GLTF_CORNELL_BOX_PATH,
+            #[cfg(debug_assertions)]
             SceneModel::GltfLogo => GLTF_LOGO_PATH,
         }
     }
@@ -127,15 +135,25 @@ impl SkyBoxType {
             SkyBoxType::StudioSmall09 => HDR_STUDIO_SMALL_09,
             SkyBoxType::Fireplace => HDR_FIREPLACE,
         };
+        #[cfg(debug_assertions)]
+        let stem = if resolution != SkyBoxResolution::R1k {
+            stem.replacen("public/hdr", "private/hdr", 1)
+        } else {
+            stem.to_string()
+        };
+        #[cfg(not(debug_assertions))]
+        let stem = stem.to_string();
         format!("{}_{}.hdr", stem, resolution.suffix())
     }
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
 pub enum SkyBoxResolution {
-    R1k,
-    R2k,
     #[default]
+    R1k,
+    #[cfg(debug_assertions)]
+    R2k,
+    #[cfg(debug_assertions)]
     R4k,
 }
 
@@ -143,7 +161,9 @@ impl SkyBoxResolution {
     pub fn suffix(self) -> &'static str {
         match self {
             SkyBoxResolution::R1k => "1k",
+            #[cfg(debug_assertions)]
             SkyBoxResolution::R2k => "2k",
+            #[cfg(debug_assertions)]
             SkyBoxResolution::R4k => "4k",
         }
     }
