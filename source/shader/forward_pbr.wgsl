@@ -85,7 +85,7 @@ fn fs_main(
 
     let lighting       = pbr_direct_lighting(normal, view, light, albedo, roughness, metallic);
     let direct_color   = lighting.direct * radiance * shadow_visibility;
-    let ambient_color  = pbr_ambient_diffuse_lighting(normal, view, albedo, metallic, ambient_irradiance);
+    let ambient_color  = pbr_ambient_diffuse_lighting(albedo, metallic, ambient_irradiance);
 
     return vec4<f32>(direct_color + ambient_color, 1.0);
 }

@@ -96,20 +96,14 @@ fn pbr_direct_lighting(
   return PbrLighting((diffuse + specular) * n_dot_l, specular_contrib);
 }
 
+// Uniform ambient diffuse. Independent of the view direction so brightness does not change with the camera.
 fn pbr_ambient_diffuse_lighting(
-  normal : vec3<f32>,
-  view : vec3<f32>,
   albedo : vec3<f32>,
   metallic : f32,
   ambient_irradiance : vec3<f32>,
 ) -> vec3<f32>
 {
-  let n_dot_v : f32 = max(dot(normal, view), 0.0);
-  let base_reflectivity = vec3<f32>(0.04, 0.04, 0.04);
-  let f0 = mix(base_reflectivity, albedo, vec3<f32>(metallic, metallic, metallic));
-  let fresnel = fresnel_schlick(n_dot_v, f0);
-  let kd = (vec3<f32>(1.0, 1.0, 1.0) - fresnel) * (1.0 - metallic);
-
+  let kd = 1.0 - metallic;
   return kd * albedo * ambient_irradiance / PI;
 }
 

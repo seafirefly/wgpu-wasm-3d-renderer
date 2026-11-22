@@ -108,7 +108,7 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
 
     // Ambient term: uniform environment light, applied to every surface
     let ambient_irradiance : vec3<f32> = u_env.ambient_light.rgb * max(u_env.ambient_light.w, 0.0);
-    let ambient : vec3<f32> = pbr_ambient_diffuse_lighting(normal, view, albedo, metallic, ambient_irradiance);
+    let ambient : vec3<f32> = pbr_ambient_diffuse_lighting(albedo, metallic, ambient_irradiance);
 
     // IBL terms are only added when an environment map is available
     if (u_env.ssr_params.y < 0.5)
