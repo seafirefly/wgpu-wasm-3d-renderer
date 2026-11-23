@@ -6,7 +6,8 @@ use crate::rendering::webgpu::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTiming
 use crate::types::Shared;
 use super::ui_elements::{
     accordion, accordion_value, append, checkbox_row, color_picker, dialog, div, element,
-    on_select, select, slider_row, stat_row, value_wrapper, widget_row, Slider,
+    link_block, on_select, select, slider_row, stat_row, text_block, value_wrapper, widget_row,
+    Slider,
 };
 use wasm_bindgen::JsCast;
 
@@ -115,6 +116,7 @@ pub fn create_control_panel(scene: &Shared<Scene>) {
     postprocess(&wrapper, scene);
     overlay(&wrapper, scene);
     performance(&wrapper);
+    help(&wrapper);
 
     append(&gloo::utils::body(), &wrapper);
     set_skybox_dependents_disabled(!scene.borrow().parameters.is_use_sky_box);
@@ -842,6 +844,25 @@ fn performance(parent: &web_sys::Element) {
     let gpu = accordion(&content, "performance-gpu", "GPU", true);
     pass_rows(&gpu, "gpu", gpu_pass_row_id);
     append(&gpu, &stat_row("Total", GPU_TOTAL_ROW_ID, 0));
+}
+
+fn help(parent: &web_sys::Element) {
+    let content = dialog(parent, "help", "Help");
+
+    let controls = accordion(&content, "help-controls", "Controls", true);
+    append(&controls, &text_block("Rotate: drag with the left or right mouse button"));
+    append(&controls, &text_block("Zoom: mouse wheel"));
+    append(&controls, &text_block("Move: W / A / S / D keys"));
+
+    let license = accordion(&content, "help-license", "License", true);
+    append(
+        &license,
+        &text_block("Bundled public assets are released under CC0 1.0 Universal."),
+    );
+    append(
+        &license,
+        &link_block("Asset license details", "public/ASSET_LICENSES.md"),
+    );
 }
 
 fn is_postprocess(group: GpuPassGroup) -> bool {

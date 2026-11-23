@@ -65,6 +65,22 @@ pub fn value_wrapper(child: &web_sys::Element) -> web_sys::Element {
     wrapper
 }
 
+pub fn text_block(text: &str) -> web_sys::Element {
+    let block = div("text-block");
+    block.set_text_content(Some(text));
+    block
+}
+
+pub fn link_block(text: &str, href: &str) -> web_sys::Element {
+    let link = element("a");
+    link.set_class_name("text-block text-link");
+    link.set_text_content(Some(text));
+    link.set_attribute("href", href).unwrap();
+    link.set_attribute("target", "_blank").unwrap();
+    link.set_attribute("rel", "noopener").unwrap();
+    link
+}
+
 pub fn stat_row(label: &str, id: &str, count: usize) -> web_sys::Element {
     let value = div("widget-value");
     value.set_id(id);
