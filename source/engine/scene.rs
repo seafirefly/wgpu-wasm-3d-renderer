@@ -45,7 +45,23 @@ impl SceneObject {
             .unwrap_or([0.0; 3]);
         [emissive[0], emissive[1], emissive[2], 0.0]
     }
+
+    /// Material id written to the GBuffer (8 bits). Indexes `SceneMaterial`s; objects without a
+    /// material, or with an index beyond the GBuffer range, get `GBUFFER_MATERIAL_ID_NONE`.
+    pub fn gbuffer_material_id(&self) -> u32 {
+        self.source_mesh
+            .as_ref()
+            .and_then(|mesh| mesh.borrow().material)
+            .map(|index| index as usize)
+            .filter(|&index| index < GBUFFER_MATERIAL_ID_NONE as usize)
+            .map_or(GBUFFER_MATERIAL_ID_NONE, |index| index as u32)
+    }
 }
+
+/// Material ids are stored in the 8-bit GBuffer channel; the last value marks "no material".
+pub const GBUFFER_MATERIAL_ID_NONE: u32 = 255;
+/// Number of entries in the per-material storage buffer read by the deferred lighting pass.
+pub const GBUFFER_MATERIAL_CAPACITY: usize = 256;
 
 #[derive(Clone, Default)]
 pub struct SceneMaterial {
@@ -62,6 +78,10 @@ pub struct SceneMaterial {
 
     // emissive radiance (emissiveFactor * emissiveStrength)
     pub emissive_factor: [f32; 3],
+
+    // KHR_materials_clearcoat factors
+    pub clearcoat_factor: f32,
+    pub clearcoat_roughness_factor: f32,
 }
 
 // Scene parameters

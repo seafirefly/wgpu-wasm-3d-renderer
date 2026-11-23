@@ -68,6 +68,12 @@ struct PbrLighting
   specular : vec3<f32>,
 }
 
+struct ClearcoatLighting
+{
+  attenuation : f32,
+  specular    : f32,
+}
+
 // light: direction towards the light. Returns BRDF * n·l (radiance not applied).
 fn pbr_direct_lighting(
   normal : vec3<f32>,
@@ -102,6 +108,33 @@ fn pbr_direct_lighting(
   let specular_contrib = specular * n_dot_l;
 
   return PbrLighting((diffuse + specular) * n_dot_l, specular_contrib);
+}
+
+// Clear coat layer: a dielectric (F0 = 0.04) specular lobe with its own roughness, over the base layer.
+// Returns the attenuation of the base layer and the coat specular (BRDF * n·l), both for one light.
+fn pbr_clearcoat_lighting(
+  normal : vec3<f32>,
+  view : vec3<f32>,
+  light : vec3<f32>,
+  intensity : f32,
+  roughness : f32,
+) -> ClearcoatLighting
+{
+  let n_dot_l : f32 = max(dot(normal, light), 0.0);
+  let n_dot_v : f32 = max(dot(normal, view), 0.0);
+  if (intensity <= 0.0 || n_dot_l <= 0.0 || n_dot_v <= 0.0) {
+    return ClearcoatLighting(1.0, 0.0);
+  }
+
+  let half_vector : vec3<f32> = safe_normalize(view + light);
+  let h_dot_v : f32 = max(dot(half_vector, view), 0.0);
+  let coat_roughness : f32 = clamp(roughness, 0.045, 1.0);
+  let fresnel : f32 = fresnel_schlick(h_dot_v, vec3<f32>(0.04, 0.04, 0.04)).x;
+
+  let coat_specular : f32 = distribution_GGX(normal, half_vector, coat_roughness)
+    * visibility_GGX(n_dot_l, n_dot_v, coat_roughness) * fresnel * n_dot_l;
+
+  return ClearcoatLighting(mix(1.0, 1.0 - fresnel, intensity), intensity * coat_specular);
 }
 
 // Uniform ambient diffuse. Independent of the view direction so brightness does not change with the camera.

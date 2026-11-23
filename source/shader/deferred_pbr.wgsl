@@ -16,6 +16,8 @@ struct Uniform
 @group(0) @binding(3) var t_albedo        : texture_2d<f32>;
 @group(0) @binding(4) var t_metallic      : texture_2d<f32>;
 @group(1) @binding(0) var<uniform>  u_differd       : Uniform;
+// per-material clearcoat params: x = intensity, y = roughness (indexed by GBuffer material id)
+@group(1) @binding(1) var<storage, read> clearcoat_params : array<vec4<f32>>;
 @group(2) @binding(0) var           t_shadow_map    : texture_depth_2d;
 @group(2) @binding(1) var           s_shadow_map    : sampler_comparison;
 @group(2) @binding(2) var           t_point_shadow_maps : texture_depth_2d_array;
@@ -32,6 +34,7 @@ struct GBufferTexel
   albedo             : vec4<f32>,
   metallic_roughness : vec4<f32>,
   is_emissive        : bool,
+  material_id        : u32,
 }
 
 struct Surface
@@ -42,6 +45,8 @@ struct Surface
   roughness : f32,
   metallic  : f32,
   view      : vec3<f32>,
+  clearcoat           : f32,
+  clearcoat_roughness : f32,
 }
 
 fn load_gbuffer(coord : vec4<f32>) -> GBufferTexel
@@ -58,11 +63,13 @@ fn load_gbuffer(coord : vec4<f32>) -> GBufferTexel
     textureLoad(t_albedo, texel, 0),
     metallic_texel,
     metallic_texel.a > 0.5,
+    u32(round(metallic_texel.r * 255.0)),
   );
 }
 
 fn make_surface(g : GBufferTexel) -> Surface
 {
+  let coat = clearcoat_params[g.material_id];
   return Surface(
     g.position,
     safe_normalize(g.normal),
@@ -70,6 +77,8 @@ fn make_surface(g : GBufferTexel) -> Surface
     clamp(g.metallic_roughness.g, 0.045, 1.0),
     clamp(g.metallic_roughness.b, 0.0, 1.0),
     safe_normalize(u_differd.camera_position.xyz - g.position),
+    coat.x,
+    coat.y,
   );
 }
 
@@ -88,13 +97,14 @@ fn shadow_visibility_for(s : Surface, light : vec3<f32>) -> f32
   return sample_directional_shadow(t_shadow_map, s_shadow_map, u_differd.light_view_projection, s.position, s.normal, light);
 }
 
-// direct light multiplied by radiance and shadow visibility
+// direct light multiplied by radiance and shadow visibility. The clear coat layer attenuates the base layer and adds its own specular.
 fn direct_radiance(s : Surface) -> vec3<f32>
 {
   let light = light_direction();
   let shadow_visibility = shadow_visibility_for(s, light);
   let lighting = pbr_direct_lighting(s.normal, s.view, light, s.albedo, s.roughness, s.metallic);
-  return lighting.direct * light_radiance() * shadow_visibility;
+  let coat = pbr_clearcoat_lighting(s.normal, s.view, light, s.clearcoat, s.clearcoat_roughness);
+  return (lighting.direct * coat.attenuation + vec3<f32>(coat.specular)) * light_radiance() * shadow_visibility;
 }
 
 // emissive triangles as area lights, each with its own shadow map layer

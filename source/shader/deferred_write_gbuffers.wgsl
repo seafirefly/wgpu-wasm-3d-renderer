@@ -22,6 +22,8 @@ struct Uniform {
     projection_matrix : mat4x4<f32>,
     rotation_matrix   : mat4x4<f32>,
     emissive          : vec4<f32>,
+    // x: GBuffer material id (stored in the metallic-roughness R channel as id / 255)
+    material          : vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> inUniform : Uniform;
@@ -67,6 +69,7 @@ fn fs_main(vertex: VertexOutput) -> FragmentOutput
     output.normal   = vec4<f32>(normalize(tbn_matrix * surface_normal) * 0.5 + 0.5, 1.0);
     output.albedo   = textureSample(base_color_texture, base_color_sampler, vertex.uv);
     output.metallic = textureSample(metallic_roughness_texture, metallic_roughness_sampler, vertex.uv);
+    output.metallic.r = inUniform.material.x / 255.0;
     let is_emissive = max(max(inUniform.emissive.r, inUniform.emissive.g), inUniform.emissive.b) > 0.0;
     output.metallic.a = select(0.0, 1.0, is_emissive);
     output.scene_color = vec4<f32>(inUniform.emissive.rgb, output.albedo.a);

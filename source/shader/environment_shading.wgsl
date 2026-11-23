@@ -26,6 +26,8 @@ const SSR_THICKNESS    : f32 = 0.05;
 @group(2) @binding(2) var s_env        : sampler;
 // lit scene color before the environment terms are added
 @group(3) @binding(0) var t_scene      : texture_2d<f32>;
+// per-material clearcoat params: x = intensity, y = roughness (indexed by GBuffer material id)
+@group(1) @binding(1) var<storage, read> clearcoat_params : array<vec4<f32>>;
 
 // World position of the surface stored at texel, rebuilt from the depth buffer
 fn gbuffer_position(texel : vec2<i32>) -> vec3<f32>
@@ -109,13 +111,21 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
     let view      : vec3<f32> = safe_normalize(u_env.camera_position.xyz - position);
     let n_dot_v   : f32       = max(dot(normal, view), 0.0);
 
+    // Clear coat: the base layer is darkened by the coat Fresnel (UE: LayerAttenuation)
+    let coat           : vec4<f32> = clearcoat_params[u32(round(mr.r * 255.0))];
+    let clearcoat      : f32       = coat.x;
+    let coat_roughness : f32       = clamp(coat.y, 0.045, 1.0);
+    let fresnel_term   : f32       = pow(1.0 - n_dot_v, 5.0);
+    let coat_fresnel   : f32       = fresnel_term + (1.0 - fresnel_term) * 0.04;
+    let layer_attenuation : f32    = mix(1.0, 1.0 - coat_fresnel, clearcoat);
+
     let f0       : vec3<f32> = mix(vec3<f32>(0.04, 0.04, 0.04), albedo, vec3<f32>(metallic));
     let fresnel  : vec3<f32> = fresnel_schlick(n_dot_v, f0);
     let kd       : vec3<f32> = (vec3<f32>(1.0, 1.0, 1.0) - fresnel) * (1.0 - metallic);
 
     // Ambient term: uniform environment light, applied to every surface
     let ambient_irradiance : vec3<f32> = u_env.ambient_light.rgb * max(u_env.ambient_light.w, 0.0);
-    let ambient : vec3<f32> = pbr_ambient_diffuse_lighting(albedo, metallic, ambient_irradiance);
+    let ambient : vec3<f32> = pbr_ambient_diffuse_lighting(albedo, metallic, ambient_irradiance) * layer_attenuation;
 
     // IBL terms are only added when an environment map is available
     if (u_env.ssr_params.y < 0.5)
@@ -125,7 +135,7 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
 
     // Diffuse environment: the irradiance map already stores the cosine-weighted average radiance
     let irradiance : vec3<f32> = textureSampleLevel(t_irradiance, s_env, normal, 0.0).rgb;
-    let diffuse    : vec3<f32> = kd * albedo * irradiance * u_env.ssr_params.z;
+    let diffuse    : vec3<f32> = kd * albedo * irradiance * u_env.ssr_params.z * layer_attenuation;
 
     // Specular environment: screen space reflection first, prefiltered environment as the fallback
     let reflect_dir : vec3<f32> = reflect(-view, normal);
@@ -138,7 +148,13 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
     }
 
     let env_brdf  : vec2<f32> = env_brdf_approx(roughness, n_dot_v);
-    let specular  : vec3<f32> = radiance * (f0 * env_brdf.x + vec3<f32>(env_brdf.y)) * u_env.ssr_params.w;
+    let base_specular : vec3<f32> = radiance * (f0 * env_brdf.x + vec3<f32>(env_brdf.y));
+
+    // Clear coat reflection (own roughness, F0 0.04) layered over the base reflection: base * (1 - F) + coat * F
+    let coat_brdf   : vec2<f32> = env_brdf_approx(coat_roughness, n_dot_v);
+    let coat_weight : f32       = clearcoat * (0.04 * coat_brdf.x + coat_brdf.y);
+    let coat_radiance : vec3<f32> = textureSampleLevel(t_prefilter, s_env, reflect_dir, coat_roughness * 4.0).rgb;
+    let specular  : vec3<f32> = (base_specular * (1.0 - coat_weight) + coat_radiance * coat_weight) * u_env.ssr_params.w;
 
     return vec4<f32>(scene.rgb + ambient + diffuse + specular, scene.a);
 }

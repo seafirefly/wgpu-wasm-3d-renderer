@@ -546,6 +546,15 @@ fn get_gltf_mesh_from_node(
     }
 }
 
+// KHR_materials_clearcoat is not exposed by the gltf crate, so its JSON factors are read directly
+fn clearcoat_factor(material: &gltf::Material, key: &str) -> f32 {
+    material
+        .extension_value("KHR_materials_clearcoat")
+        .and_then(|value| value.get(key))
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.0) as f32
+}
+
 async fn get_gltf_material<'a>(
     material: &gltf::Material<'a>,
     buffer_data: &Vec<Vec<u8>>,
@@ -744,6 +753,8 @@ async fn get_gltf_material<'a>(
             let factor = material.emissive_factor();
             [factor[0] * strength, factor[1] * strength, factor[2] * strength]
         },
+        clearcoat_factor: clearcoat_factor(material, "clearcoatFactor"),
+        clearcoat_roughness_factor: clearcoat_factor(material, "clearcoatRoughnessFactor"),
         ..Default::default()
     }
 }

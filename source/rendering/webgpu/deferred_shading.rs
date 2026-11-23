@@ -210,6 +210,7 @@ pub struct WebGPUDeferredShadingResource {
     pub gbuffer_views: [wgpu::TextureView; 3],
     pub bind_groups: Vec<wgpu::BindGroup>,
     pub uniform_buf: wgpu::Buffer,
+    pub clearcoat_buf: wgpu::Buffer,
     pub render_pipeline: wgpu::RenderPipeline,
     pub debug_pipeline: wgpu::RenderPipeline,
     pub ibl_bind_group_layout: wgpu::BindGroupLayout,
@@ -222,6 +223,7 @@ pub fn create_deferred_gbuffer_shader_context(interface: &WebGPUInterface) -> We
         _projection_matrix: [f32; 16],
         _rotation_matrix: [f32; 16],
         _emissive: [f32; 4],
+        _material: [f32; 4],
     }
 
     let shader: wgpu::ShaderModule =
@@ -561,6 +563,7 @@ fn update_deferred_gbuffer_shading_resource(
         uniform_total.extend_from_slice(&projection_matrix.to_cols_array());
         uniform_total.extend_from_slice(&rotaton_matrix.to_cols_array());
         uniform_total.extend_from_slice(&object.emissive_factor(&scene.materials));
+        uniform_total.extend_from_slice(&[object.gbuffer_material_id() as f32, 0.0, 0.0, 0.0]);
         let uniform_ref: &[f32] = uniform_total.as_ref();
 
         let mesh = mesh_resource.borrow();
@@ -726,27 +729,53 @@ fn create_deferred_shading_context(
         .device
         .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
         });
+
+    let clearcoat_size: u64 = (engine::scene::GBUFFER_MATERIAL_CAPACITY * 16) as u64;
+    let clearcoat_buf: wgpu::Buffer = interface.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Clearcoat material buffer"),
+        size: clearcoat_size,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
 
     let uniform_bind_group: wgpu::BindGroup =
         interface
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &uniform_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
-                }],
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: clearcoat_buf.as_entire_binding(),
+                    },
+                ],
                 label: Some("Bind group 1"),
             });
 
@@ -1019,6 +1048,7 @@ fn create_deferred_shading_context(
         gbuffer_views,
         bind_groups,
         uniform_buf,
+        clearcoat_buf,
         render_pipeline,
         debug_pipeline,
         ibl_bind_group_layout,
@@ -1074,4 +1104,24 @@ fn update_deferred_shading_buffer(
     interface
         .queue
         .write_buffer(&resource.uniform_buf, 0, bytemuck::cast_slice(uniform_ref));
+
+    // Per-material clearcoat params, indexed by the GBuffer material id. Unused slots stay zero.
+    let mut clearcoat_params = vec![[0.0f32; 4]; engine::scene::GBUFFER_MATERIAL_CAPACITY];
+    for (slot, material) in clearcoat_params
+        .iter_mut()
+        .zip(scene_value.materials.iter())
+        .take(engine::scene::GBUFFER_MATERIAL_ID_NONE as usize)
+    {
+        *slot = [
+            material.clearcoat_factor,
+            material.clearcoat_roughness_factor,
+            0.0,
+            0.0,
+        ];
+    }
+    interface.queue.write_buffer(
+        &resource.clearcoat_buf,
+        0,
+        bytemuck::cast_slice(&clearcoat_params),
+    );
 }
