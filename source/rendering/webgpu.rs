@@ -8,6 +8,7 @@ pub mod bloom_shading;
 pub mod composite_shading;
 pub mod dof_shading;
 pub mod differed_shading;
+pub mod diffuse_indirect_shading;
 pub mod environment_shading;
 pub mod forward_shading;
 pub mod gpu_profiler;
@@ -69,6 +70,7 @@ pub struct WebGPUMeshRenderingResource {
 // Unique resources that are shared in the whole rendering process. It is created once and shared between objects.
 pub struct WebGPUUniqueResources {
     pub differed_shading_resource: Option<differed_shading::WebGPUDifferedShadingResource>,
+    pub diffuse_indirect_resource: Option<diffuse_indirect_shading::WebGPUDiffuseIndirectResource>,
     pub line_grid_shading_resource: Option<line_grid_shading::WebGPULineGridShadingResource>,
     pub dof_shading_resource: Option<dof_shading::WebGPUDofShadingResource>,
     pub bloom_shading_resource: Option<bloom_shading::WebGPUbloomShadingResource>,

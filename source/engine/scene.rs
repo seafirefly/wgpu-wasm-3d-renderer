@@ -93,6 +93,13 @@ pub struct SceneParameter {
     pub is_use_ssr: bool,
     pub is_use_ibl_diffuse: bool,
     pub is_use_ibl_specular: bool,
+    // screen space diffuse indirect light (SSGI) and ambient occlusion, added in the lighting pass
+    pub is_use_diffuse_indirect: bool,
+    // maximum screen space trace distance in world units
+    pub diffuse_indirect_max_distance: f32,
+    pub diffuse_indirect_intensity: f32,
+    // 0: no occlusion, 1: full screen space ambient occlusion
+    pub ambient_occlusion_strength: f32,
     // 0: off, 1: irradiance map, 2..=6: prefilter map mip 0..=4
     pub ibl_debug_type: u8,
     // postprocess
@@ -271,6 +278,10 @@ impl SceneParameter {
             is_use_environment_map: true,
             is_use_environment_pass: true,
             is_use_ssr: true,
+            is_use_diffuse_indirect: true,
+            diffuse_indirect_max_distance: 5.0,
+            diffuse_indirect_intensity: 1.0,
+            ambient_occlusion_strength: 1.0,
             is_use_ibl_diffuse: true,
             is_use_ibl_specular: true,
             ibl_debug_type: 0,

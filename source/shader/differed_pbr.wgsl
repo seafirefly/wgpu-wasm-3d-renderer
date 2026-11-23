@@ -19,6 +19,8 @@ struct Uniform
 @group(2) @binding(0) var           t_shadow_map    : texture_depth_2d;
 @group(2) @binding(1) var           s_shadow_map    : sampler_comparison;
 @group(2) @binding(2) var           t_point_shadow_maps : texture_depth_2d_array;
+// diffuse indirect light (rgb, already weighted by albedo) and screen space ambient occlusion (a)
+@group(3) @binding(0) var t_diffuse_indirect : texture_2d<f32>;
 
 // fragment helpers
 
@@ -138,7 +140,11 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
   // (emissive radiance itself is already in SceneColor)
   let area_radiance = emissive_radiance(s) * select(1.0, 0.0, g.is_emissive);
 
-  return vec4<f32>(direct_radiance(s) + area_radiance, g.albedo.a);
+  // diffuse indirect light, occluded by the screen space ambient occlusion in alpha
+  let indirect = textureLoad(t_diffuse_indirect, vec2<i32>(floor(coord.xy)), 0);
+  let indirect_radiance = indirect.rgb * indirect.a * select(1.0, 0.0, g.is_emissive);
+
+  return vec4<f32>(direct_radiance(s) + area_radiance + indirect_radiance, g.albedo.a);
 }
 
 @fragment

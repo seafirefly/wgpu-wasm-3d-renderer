@@ -438,6 +438,57 @@ fn lighting_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
         ];
     });
     append(&content, &widget_row("Clear color", &[&clear_color]));
+
+    let diffuse_indirect = accordion(&content, "diffuse-indirect", "Diffuse Indirect (SSGI / AO)", true);
+    let checked = scene.borrow().parameters.is_use_diffuse_indirect;
+    append(
+        &diffuse_indirect,
+        &checkbox_row(scene, "Active", "diffuse-indirect-active", checked, |s, v| {
+            s.parameters.is_use_diffuse_indirect = v;
+        }),
+    );
+    let value = scene.borrow().parameters.diffuse_indirect_max_distance;
+    let slider = Slider {
+        id: "diffuse-indirect-distance-range",
+        label: "Distance",
+        min: "0.5",
+        max: "20.0",
+        value,
+    };
+    append(
+        &diffuse_indirect,
+        &slider_row(scene, slider, |s, v| {
+            s.parameters.diffuse_indirect_max_distance = v;
+        }),
+    );
+    let value = scene.borrow().parameters.diffuse_indirect_intensity;
+    let slider = Slider {
+        id: "diffuse-indirect-intensity-range",
+        label: "Intensity",
+        min: "0.0",
+        max: "4.0",
+        value,
+    };
+    append(
+        &diffuse_indirect,
+        &slider_row(scene, slider, |s, v| {
+            s.parameters.diffuse_indirect_intensity = v;
+        }),
+    );
+    let value = scene.borrow().parameters.ambient_occlusion_strength;
+    let slider = Slider {
+        id: "ambient-occlusion-strength-range",
+        label: "AO",
+        min: "0.0",
+        max: "1.0",
+        value,
+    };
+    append(
+        &diffuse_indirect,
+        &slider_row(scene, slider, |s, v| {
+            s.parameters.ambient_occlusion_strength = v;
+        }),
+    );
 }
 
 fn wrapper_class(active: bool) -> &'static str {

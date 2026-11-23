@@ -2,6 +2,7 @@ use crate::engine;
 use crate::engine::constant;
 use crate::engine::emissive_light;
 use crate::rendering::common;
+use crate::rendering::webgpu::diffuse_indirect_shading;
 use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUShaderContext, WebGPUUniqueResources, WEBGPU_CULL_MODE,
@@ -38,6 +39,10 @@ pub fn differed_shading_pass(
     }
 
     // Initialize differed shading resources
+    if global_resources.diffuse_indirect_resource.is_none() {
+        global_resources.diffuse_indirect_resource =
+            Some(diffuse_indirect_shading::create_diffuse_indirect_resource(interface));
+    }
     if global_resources.differed_shading_resource.is_none() {
         global_resources.differed_shading_resource =
             Some(create_differed_shading_context(interface, global_resources));
@@ -54,6 +59,7 @@ pub fn differed_shading_pass(
     }
 
     let dsr = global_resources.differed_shading_resource.as_ref().unwrap();
+    let indirect = global_resources.diffuse_indirect_resource.as_ref().unwrap();
 
     // Rendering pass
     {
@@ -133,6 +139,15 @@ pub fn differed_shading_pass(
             }
         }
 
+        // diffuse indirect pass: traces bounces from the gbuffers, consumed by the lighting pass below
+        diffuse_indirect_shading::diffuse_indirect_pass(
+            interface,
+            scene,
+            command_encoder,
+            dsr,
+            indirect,
+        );
+
         // differed shading pass: adds direct lighting onto SceneColor written by the BasePass
         {
             let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Lights);
@@ -168,10 +183,15 @@ pub fn differed_shading_pass(
             for (index, bind_group) in dsr.bind_groups.iter().take(3).enumerate() {
                 differed_shading_pass.set_bind_group(index as u32, bind_group, &[]);
             }
+            // diffuse indirect light (rgb) and ambient occlusion (a)
+            differed_shading_pass.set_bind_group(3, &indirect.lighting_bind_group, &[]);
 
             // draw call
             differed_shading_pass.draw(0..6, 0..1);
         }
+
+        // Keep the direct lit scene for the next frame's diffuse indirect pass
+        diffuse_indirect_shading::save_diffuse_indirect_history(interface, command_encoder, indirect);
     }
 }
 
@@ -807,6 +827,11 @@ fn create_differed_shading_context(
                     &gbuffer_bind_group_layout,
                     &uniform_bind_group_layout,
                     &shadow_bind_group_layout,
+                    &global_resources
+                        .diffuse_indirect_resource
+                        .as_ref()
+                        .unwrap()
+                        .lighting_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });
