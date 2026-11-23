@@ -1,5 +1,4 @@
 /target
-/distribute
 /distribute-debug
 /resource/private/*
 !/resource/private/.gitkeep

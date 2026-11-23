@@ -1,0 +1,254 @@
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-family-mono: "Courier New";
+}
+
+#canvas {
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+}
+
+#dialog-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 220px;
+  margin-top: 20px;
+  margin-left: 20px;
+  border: 1px solid #ffffff;
+  border-radius: 2px;
+  background-color: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
+}
+
+.dialog-element {
+  padding: 5px;
+}
+
+.dialog-element-hidden {
+  display: none;
+}
+
+.dialog-element-display {
+  display: block;
+}
+
+.accordion-input {
+  display: none;
+}
+
+.accordion-label, .accordion-content {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  transition: all 0.3s;
+}
+
+.accordion-label {
+  display: block;
+  position: relative;
+  padding-left: 20px;
+  margin-bottom: 1px;
+  user-select: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: normal;
+  text-align: left;
+}
+
+.accordion-label::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid #ffffff;
+  border-right: 2px solid #ffffff;
+  position: absolute;
+  top: calc(50% - 3px);
+  left: 3px;
+  bottom: 5px;
+  transform: rotate(45deg);
+  transition: all 0.2s;
+}
+
+.accordion-input:checked + .accordion-label::before {
+  transform: rotate(135deg) translateY(0px) translateX(-4px);
+  transition: all 0.2s;
+}
+
+.accordion-value {
+  position: absolute;
+  left: calc(50% + 1px);
+  white-space: nowrap;
+}
+
+.accordion-content {
+  margin-left: 5px;
+  padding-left: 5px;
+  border-left: 1px solid #dfdfdf;
+  max-height: 0;
+  margin-top: 5px;
+  overflow: hidden;
+  color: #ffffff;
+}
+
+.accordion-input:checked + .accordion-label + .accordion-content {
+  max-height: 500px;
+  transition: all 1.5s;
+}
+
+.inner-accordion-label::before {
+  border-top: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+}
+
+.widget-wrapper {
+  margin-left: 5px;
+  padding-left: 5px;
+  border-left: 1px solid #dfdfdf;
+  font-size: 13px;
+}
+
+.widget-wrapper-hidden {
+  display: none;
+}
+
+.widget-row {
+  height: 20px;
+  font-size: 13px;
+  font-weight: 400;
+  margin: 2px;
+  margin-left: 4px;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.widget-label {
+  width: 50%;
+  user-select: none;
+}
+
+.widget-value {
+  width: 50%;
+}
+
+#frame-time-analytics-value,
+#fps-analytics-value,
+[id^=gpu-][id$=-analytics-value],
+[id^=cpu-][id$=-analytics-value] {
+  white-space: nowrap;
+}
+
+#dialog-element-performance .widget-label {
+  width: 60%;
+}
+
+#dialog-element-performance .widget-value {
+  width: 40%;
+}
+
+#dialog-element-performance .accordion-value {
+  left: calc(60% + 0.4px);
+}
+
+.text-block {
+  display: block;
+  margin: 2px 4px 2px 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.text-link {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.widget-separator {
+  height: 1px;
+  margin: 5px;
+  background-color: #dfdfdf !important;
+}
+
+.select-element {
+  text-align-last: left;
+  border: 1px solid #dfdfdf;
+  border-radius: 3px;
+  color: #dfdfdf;
+  background-color: transparent;
+  font-size: 13px;
+}
+
+.select-element:hover {
+  color: #ffffff;
+}
+
+.select-element:focus {
+  outline: 0px;
+}
+
+.select-element > option {
+  color: #dfdfdf;
+}
+
+.range-element {
+  appearance: none;
+  display: inline-block;
+  width: 60%;
+  height: 10px;
+  accent-color: #dfdfdf;
+  background: transparent;
+  border: 1px solid #dfdfdf;
+  border-radius: 3px;
+}
+
+.range-element::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 3px;
+  height: 10px;
+  background: #dfdfdf;
+  box-shadow: none;
+}
+
+.range-element::-moz-range-thumb {
+  border: none;
+  border-radius: 0;
+  width: 3px;
+  height: 1px;
+  background: #dfdfdf;
+  box-shadow: none;
+}
+
+.range-text-element {
+  display: inline-block;
+  width: 30%;
+  text-align: center;
+}
+
+.checkbox-element {
+  margin-left: 20px;
+}
+
+.color-picker-element {
+  border: 0px;
+  border-radius: 3px;
+  outline: 0px;
+  height: 20px;
+  background-color: transparent;
+}
+
+.color-picker-element::-webkit-color-swatch {
+  border: none;
+}
+
+.color-picker-element::-webkit-color-swatch-wrapper {
+  padding: 0px;
+  border: 1px solid #dfdfdf;
+}

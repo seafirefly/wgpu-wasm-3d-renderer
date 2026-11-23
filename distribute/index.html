@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<script type="module">
+import init, * as bindings from '/wgpu-wasm-3d-renderer/wgpu-wasm-3d-renderer-9a2146e46c61afb5.js';
+
+const wasm = await init({ module_or_path: '/wgpu-wasm-3d-renderer/wgpu-wasm-3d-renderer-577df06c33822bd_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+    <link rel="stylesheet" href="/wgpu-wasm-3d-renderer/index-313d8190f9aa9feb.css" integrity="sha384-HEL4+70zmJ5B6K9/sgmwYqmiWc02Nen6tXzHv5lf0JMO3djpJKdoXKUiKwzHXdbq"/>
+    
+  <link rel="modulepreload" href="/wgpu-wasm-3d-renderer/wgpu-wasm-3d-renderer-9a2146e46c61afb5.js" crossorigin="anonymous" integrity="sha384-EhvxtQ3Gsati7cJboPcrBNC7grZkg0UPTqfGntta8rOinD2n3icopwrNzgPs9QE/"><link rel="preload" href="/wgpu-wasm-3d-renderer/wgpu-wasm-3d-renderer-577df06c33822bd_bg.wasm" crossorigin="anonymous" integrity="sha384-ex7R4Upk4V4UM83Fw9j8628exjdLSJk+TXPW/d8J3AFFO2SiJ9gv7li79pBUJoqS" as="fetch" type="application/wasm"></head>
+  <body>
+    <canvas id = "canvas" oncontextmenu="return false;" tabindex="1">
+  </body>
+</html>
