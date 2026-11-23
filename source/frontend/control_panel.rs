@@ -110,7 +110,6 @@ pub fn create_control_panel(scene: &Shared<Scene>) {
     wrapper.set_id("dialog-wrapper");
 
     environment(&wrapper, scene);
-    camera(&wrapper, scene);
     lighting_pass(&wrapper, scene);
     environment_pass(&wrapper, scene);
     postprocess(&wrapper, scene);
@@ -326,6 +325,8 @@ fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
         );
     }
 
+    camera(&content, scene);
+
     let information = accordion(&content, "information", "Information", true);
     let (objects, materials, lights) = {
         let scene = scene.borrow();
@@ -350,7 +351,7 @@ fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
 }
 
 fn camera(parent: &web_sys::Element, scene: &Shared<Scene>) {
-    let content = dialog(parent, "camera", "Camera");
+    let content = accordion(parent, "camera", "Camera", true);
 
     let position = accordion(&content, "camera-position", "Position", true);
     for (index, &(id, label)) in CAMERA_POSITION_AXES.iter().enumerate() {
@@ -421,32 +422,22 @@ fn lighting_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
         });
     }
     append(&content, &widget_row("Rendering type", &[&render_type]));
-
-    let forward_shading = select("forward-type-select", &[("pbr", 0u8)], Some(0u8));
-    append(
-        &forward_wrapper,
-        &widget_row("shading", &[&forward_shading]),
-    );
+    let group = div("widget-wrapper");
+    append(&content, &group);
 
     let forward_display = select("forward-display-select", &FORWARD_DISPLAY, None);
     on_select(scene, &forward_display, &FORWARD_DISPLAY, |s, v| {
         s.parameters.forward_debug_type = v;
     });
-    append(&forward_wrapper, &widget_row("out", &[&forward_display]));
-    append(&content, &forward_wrapper);
-
-    let deferred_shading = select("deferred-type-select", &[("pbr", 0u8)], Some(0u8));
-    append(
-        &deferred_wrapper,
-        &widget_row("shading", &[&deferred_shading]),
-    );
+    append(&forward_wrapper, &widget_row("Out", &[&forward_display]));
+    append(&group, &forward_wrapper);
 
     let buffer_type = select("buffer-type-select", &BUFFER_TYPES, None);
     on_select(scene, &buffer_type, &BUFFER_TYPES, |s, v| {
         s.parameters.deferred_debug_type = v;
     });
-    append(&deferred_wrapper, &widget_row("out", &[&buffer_type]));
-    append(&content, &deferred_wrapper);
+    append(&deferred_wrapper, &widget_row("Out", &[&buffer_type]));
+    append(&group, &deferred_wrapper);
 
     let bg = scene.borrow().parameters.background_color;
     let hex = format!(
@@ -466,7 +457,7 @@ fn lighting_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
             1.0,
         ];
     });
-    append(&content, &widget_row("Clear color", &[&clear_color]));
+    append(&group, &widget_row("Clear Color", &[&clear_color]));
 
     let diffuse_indirect = accordion(&content, "diffuse-indirect", "Diffuse Indirect (SSGI / AO)", true);
     let checked = scene.borrow().parameters.is_use_diffuse_indirect;
@@ -522,18 +513,14 @@ fn lighting_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
 
 fn wrapper_class(active: bool) -> &'static str {
     if active {
-        "widget-wrapper"
+        ""
     } else {
-        "widget-wrapper widget-wrapper-hidden"
+        "widget-wrapper-hidden"
     }
 }
 
 fn wrapper_div(id: &str, active: bool) -> web_sys::Element {
-    let wrapper = div(if active {
-        "widget-wrapper"
-    } else {
-        "widget-wrapper-hidden"
-    });
+    let wrapper = div(if active { "" } else { "widget-wrapper-hidden" });
     wrapper.set_id(id);
     wrapper
 }
