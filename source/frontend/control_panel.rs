@@ -5,8 +5,8 @@ use crate::engine::scene::{
 use crate::rendering::webgpu::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTimings};
 use crate::types::Shared;
 use super::ui_elements::{
-    accordion, append, checkbox_row, color_picker, dialog, div, element, on_select, select,
-    slider_row, stat_row, value_wrapper, widget_row, Slider,
+    accordion, accordion_value, append, checkbox_row, color_picker, dialog, div, element,
+    on_select, select, slider_row, stat_row, value_wrapper, widget_row, Slider,
 };
 use wasm_bindgen::JsCast;
 
@@ -216,6 +216,19 @@ pub fn update_gpu_statistics(
         None => "CPU".to_string(),
     };
     update_statistic("accordion-performance-cpu-label", &cpu_label);
+
+    let gpu_postprocess = ms_text(timings.and_then(|t| group_sum_ms(&t.group_ms, is_postprocess)));
+    update_statistic("accordion-performance-gpu-postprocess-value", &gpu_postprocess);
+
+    let cpu_postprocess =
+        ms_text(cpu_timings.and_then(|t| group_sum_ms(&t.group_ms, is_postprocess)));
+    update_statistic("accordion-performance-cpu-postprocess-value", &cpu_postprocess);
+
+    let gpu_overlay = ms_text(timings.and_then(|t| group_sum_ms(&t.group_ms, is_overlay)));
+    update_statistic("accordion-performance-gpu-overlay-value", &gpu_overlay);
+
+    let cpu_overlay = ms_text(cpu_timings.and_then(|t| group_sum_ms(&t.group_ms, is_overlay)));
+    update_statistic("accordion-performance-cpu-overlay-value", &cpu_overlay);
 }
 
 const GPU_TOTAL_ROW_ID: &str = "gpu-total-analytics-value";
@@ -767,20 +780,66 @@ fn performance(parent: &web_sys::Element) {
     );
     append(&content, &stat_row("FPS", "fps-analytics-value", 0));
     let cpu = accordion(&content, "performance-cpu", "CPU", true);
-    for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
-        append(
-            &cpu,
-            &stat_row(group.label(), &cpu_pass_row_id(index), 0),
-        );
-    }
+    pass_rows(&cpu, "cpu", cpu_pass_row_id);
     append(&cpu, &stat_row("Total", CPU_TOTAL_ROW_ID, 0));
 
     let gpu = accordion(&content, "performance-gpu", "GPU", true);
-    for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
-        append(
-            &gpu,
-            &stat_row(group.label(), &gpu_pass_row_id(index), 0),
-        );
-    }
+    pass_rows(&gpu, "gpu", gpu_pass_row_id);
     append(&gpu, &stat_row("Total", GPU_TOTAL_ROW_ID, 0));
+}
+
+fn is_postprocess(group: GpuPassGroup) -> bool {
+    matches!(
+        group,
+        GpuPassGroup::DepthOfField | GpuPassGroup::Bloom | GpuPassGroup::Composite
+    )
+}
+
+fn is_overlay(group: GpuPassGroup) -> bool {
+    matches!(group, GpuPassGroup::LineGrid)
+}
+
+fn group_sum_ms(group_ms: &[Option<f64>], predicate: fn(GpuPassGroup) -> bool) -> Option<f64> {
+    GpuPassGroup::ALL
+        .iter()
+        .zip(group_ms)
+        .filter(|(group, _)| predicate(**group))
+        .filter_map(|(_, ms)| *ms)
+        .reduce(|a, b| a + b)
+}
+
+fn ms_text(ms: Option<f64>) -> String {
+    match ms {
+        Some(ms) => format!("{ms:.2} ms"),
+        None => "-".to_string(),
+    }
+}
+
+fn pass_rows(parent: &web_sys::Element, name: &str, row_id: fn(usize) -> String) {
+    for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
+        if !is_postprocess(*group) && !is_overlay(*group) {
+            append(parent, &stat_row(group.label(), &row_id(index), 0));
+        }
+    }
+
+    let postprocess = accordion(
+        parent,
+        &format!("performance-{name}-postprocess"),
+        "Postprocess",
+        true,
+    );
+    for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
+        if is_postprocess(*group) {
+            append(&postprocess, &stat_row(group.label(), &row_id(index), 0));
+        }
+    }
+    accordion_value(parent, &format!("performance-{name}-postprocess"));
+
+    let overlay = accordion(parent, &format!("performance-{name}-overlay"), "Overlay", true);
+    for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
+        if is_overlay(*group) {
+            append(&overlay, &stat_row(group.label(), &row_id(index), 0));
+        }
+    }
+    accordion_value(parent, &format!("performance-{name}-overlay"));
 }

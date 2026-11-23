@@ -93,6 +93,11 @@ body {
 	transform: rotate(135deg) translateY(0px) translateX(-4px);
 	transition: all 0.2s;
 }
+.accordion-value {
+	position: absolute;
+	left: calc(50% + 1px);
+	white-space: nowrap;
+}
 .accordion-content {
 	@include nested-block;
 

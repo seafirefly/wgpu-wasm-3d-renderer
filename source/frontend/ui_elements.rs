@@ -239,6 +239,18 @@ pub fn accordion(
     content
 }
 
+pub fn accordion_value(parent: &web_sys::Element, name: &str) {
+    let label = parent
+        .query_selector(&format!("#accordion-{name}-label"))
+        .unwrap()
+        .expect("accordion label should exist");
+
+    let value = element("span");
+    value.set_id(&format!("accordion-{name}-value"));
+    value.set_class_name("accordion-value");
+    append(&label, &value);
+}
+
 pub fn dialog(parent: &web_sys::Element, name: &str, title: &str) -> web_sys::Element {
     let root = div("dialog-element dialog-element-display");
     root.set_id(&format!("dialog-element-{name}"));
