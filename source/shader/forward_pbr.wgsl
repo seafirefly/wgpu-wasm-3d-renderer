@@ -18,6 +18,9 @@ struct Uniform
     light_view_projection : mat4x4<f32>,
     buffer_type           : vec4<f32>,
     camera_position       : vec4<f32>,
+    emissive              : vec4<f32>,
+    emissive_light_count  : vec4<f32>,
+    emissive_lights       : array<EmissiveLight, MAX_EMISSIVE_LIGHTS>,
 }
 
 @group(0) @binding(0) var<uniform> inUniform          : Uniform;
@@ -29,6 +32,7 @@ struct Uniform
 @group(1) @binding(5) var          metallic_roughness_sampler : sampler;
 @group(2) @binding(0) var          shadow_texture     : texture_depth_2d;
 @group(2) @binding(1) var          shadow_sampler     : sampler_comparison;
+@group(2) @binding(2) var          point_shadow_texture : texture_depth_2d_array;
 
 @vertex
 fn vs_main(
@@ -87,5 +91,18 @@ fn fs_main(
     let direct_color   = lighting.direct * radiance * shadow_visibility;
     let ambient_color  = pbr_ambient_diffuse_lighting(albedo, metallic, ambient_irradiance);
 
-    return vec4<f32>(direct_color + ambient_color, 1.0);
+    var area_radiance = vec3<f32>(0.0, 0.0, 0.0);
+    let is_emissive = max(max(inUniform.emissive.r, inUniform.emissive.g), inUniform.emissive.b) > 0.0;
+    let emissive_count = u32(inUniform.emissive_light_count.x);
+    for (var i = 0u; i < emissive_count; i++)
+    {
+        let light = inUniform.emissive_lights[i];
+        let direct = emissive_light_direct(light, vertex.world_pos, normal, view, albedo, roughness, metallic);
+        let visibility = sample_point_light_shadow(point_shadow_texture, shadow_sampler, light, vertex.world_pos, normal);
+        area_radiance += direct * visibility;
+    }
+    // emissive surfaces only show their own emission
+    area_radiance *= select(1.0, 0.0, is_emissive);
+
+    return vec4<f32>(direct_color + ambient_color + area_radiance + inUniform.emissive.rgb, 1.0);
 }

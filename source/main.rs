@@ -65,6 +65,7 @@ pub async fn main() {
         scene_value.objects = objects;
         scene_value.materials = materials;
         scene_value.parameters.light_parameters = light_parameters;
+        scene_value.emissive_lights = engine::emissive_light::collect_emissive_lights(&scene_value);
     }
 
     // Batch scene objects

@@ -673,6 +673,12 @@ async fn get_gltf_material<'a>(
         normal_texture_size: normal_texture_size,
         metallic_roughness_texture: metallic_roughness_texture_data,
         metallic_roughness_texture_size,
+        // emissive radiance in linear HDR units; KHR_materials_emissive_strength scales it
+        emissive_factor: {
+            let strength = material.emissive_strength().unwrap_or(1.0);
+            let factor = material.emissive_factor();
+            [factor[0] * strength, factor[1] * strength, factor[2] * strength]
+        },
         ..Default::default()
     }
 }

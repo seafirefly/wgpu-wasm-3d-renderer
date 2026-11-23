@@ -60,6 +60,7 @@ fn apply_loaded_scene(
         scene_value.materials = materials;
         scene_value.parameters.scene_model = model;
         scene_value.parameters.light_parameters = light_parameters;
+        scene_value.emissive_lights = engine::emissive_light::collect_emissive_lights(&scene_value);
     }
     engine::scene::batch_objects(scene);
     create_mesh_rendering_resources(interface, scene);

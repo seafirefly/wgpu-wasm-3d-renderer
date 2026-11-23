@@ -1,4 +1,5 @@
 use crate::engine;
+use crate::engine::emissive_light;
 use crate::rendering::common;
 use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE};
@@ -14,6 +15,12 @@ pub struct WebGPUShadowResource {
     pub render_pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub light_view_projection: glam::Mat4,
+    // emissive light shadow maps: one layer per light
+    pub _point_shadow_texture: wgpu::Texture,
+    pub point_shadow_array_view: wgpu::TextureView,
+    pub point_shadow_layer_views: Vec<wgpu::TextureView>,
+    // [light][object] model matrix uniforms, rebuilt when the object count changes
+    pub point_object_uniforms: Vec<Vec<(wgpu::Buffer, wgpu::BindGroup)>>,
 }
 
 pub fn shadow_pass(
@@ -177,12 +184,153 @@ fn create_shadow_resource(interface: &WebGPUInterface) -> WebGPUShadowResource {
             cache: None,
         });
 
+    let point_shadow_texture = interface.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("Emissive Shadow Texture"),
+        size: wgpu::Extent3d {
+            width: emissive_light::POINT_SHADOW_MAP_SIZE,
+            height: emissive_light::POINT_SHADOW_MAP_SIZE,
+            depth_or_array_layers: emissive_light::MAX_EMISSIVE_LIGHTS as u32,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: SHADOW_DEPTH_FORMAT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let point_shadow_array_view = point_shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+        dimension: Some(wgpu::TextureViewDimension::D2Array),
+        ..Default::default()
+    });
+    let point_shadow_layer_views = (0..emissive_light::MAX_EMISSIVE_LIGHTS as u32)
+        .map(|layer| {
+            point_shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                base_array_layer: layer,
+                array_layer_count: Some(1),
+                ..Default::default()
+            })
+        })
+        .collect();
+
     WebGPUShadowResource {
         shadow_texture,
         shadow_sampler,
         render_pipeline,
         bind_group_layout,
         light_view_projection: glam::Mat4::IDENTITY,
+        _point_shadow_texture: point_shadow_texture,
+        point_shadow_array_view,
+        point_shadow_layer_views,
+        point_object_uniforms: Vec::new(),
+    }
+}
+
+/// Renders the scene from each emissive light into its shadow map layer.
+pub fn point_shadow_pass(
+    interface: &WebGPUInterface,
+    scene: &engine::scene::Scene,
+    command_encoder: &mut wgpu::CommandEncoder,
+    global_resources: &mut WebGPUUniqueResources,
+) {
+    if scene.emissive_lights.is_empty() {
+        return;
+    }
+    let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Shadow);
+    if global_resources.shadow_resource.is_none() {
+        global_resources.shadow_resource = Some(create_shadow_resource(interface));
+    }
+
+    let shadow_resource = global_resources.shadow_resource.as_mut().unwrap();
+    let needs_rebuild = shadow_resource
+        .point_object_uniforms
+        .first()
+        .map_or(true, |objects| objects.len() != scene.objects.len());
+    if needs_rebuild {
+        shadow_resource.point_object_uniforms = (0..emissive_light::MAX_EMISSIVE_LIGHTS)
+            .map(|_| {
+                scene
+                    .objects
+                    .iter()
+                    .map(|_| {
+                        let buffer = interface.device.create_buffer(&wgpu::BufferDescriptor {
+                            label: Some("Emissive Shadow Uniform Buffer"),
+                            size: (std::mem::size_of::<[f32; 16]>() * 2) as u64,
+                            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                            mapped_at_creation: false,
+                        });
+                        let bind_group =
+                            interface.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("Emissive Shadow Bind Group"),
+                                layout: &shadow_resource.bind_group_layout,
+                                entries: &[wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: buffer.as_entire_binding(),
+                                }],
+                            });
+                        (buffer, bind_group)
+                    })
+                    .collect()
+            })
+            .collect();
+    }
+    let shadow_resource = &*shadow_resource;
+
+    let model_matrices: Vec<glam::Mat4> = scene
+        .objects
+        .iter()
+        .map(|object| {
+            let model = glam::Mat4::from_cols_array_2d(&object.world_transform);
+            if scene.parameters.is_convert_y_to_z {
+                glam::Mat4::from_axis_angle(glam::Vec3::X, std::f32::consts::PI / 2.0) * model
+            } else {
+                model
+            }
+        })
+        .collect();
+
+    for (light_index, light) in scene.emissive_lights.iter().enumerate() {
+        let light_view_projection = emissive_light::point_light_view_projection(light);
+
+        for (object_index, object) in scene.objects.iter().enumerate() {
+            if object.mesh_rendering_resource.is_none() {
+                continue;
+            }
+            let (buffer, _) = &shadow_resource.point_object_uniforms[light_index][object_index];
+            let mut uniform_total = model_matrices[object_index].to_cols_array().to_vec();
+            uniform_total.extend_from_slice(&light_view_projection.to_cols_array());
+            interface
+                .queue
+                .write_buffer(buffer, 0, bytemuck::cast_slice(uniform_total.as_slice()));
+        }
+
+        let mut shadow_render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Emissive shadow pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &shadow_resource.point_shadow_layer_views[light_index],
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        shadow_render_pass.set_pipeline(&shadow_resource.render_pipeline);
+        for (object_index, object) in scene.objects.iter().enumerate() {
+            let Some(mesh_resource) = object.mesh_rendering_resource.as_ref() else {
+                continue;
+            };
+            let (_, bind_group) = &shadow_resource.point_object_uniforms[light_index][object_index];
+            let mesh = mesh_resource.borrow();
+            shadow_render_pass.set_bind_group(0, bind_group, &[]);
+            shadow_render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            shadow_render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            shadow_render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+        }
     }
 }
 

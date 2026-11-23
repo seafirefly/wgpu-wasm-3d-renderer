@@ -255,6 +255,7 @@ pub fn update_rendering_main(
             });
 
     shadow::shadow_pass(interface, scene, &mut main_command_encoder, global_resources);
+    shadow::point_shadow_pass(interface, scene, &mut main_command_encoder, global_resources);
 
     if scene.parameters.is_use_sky_box {
         hdr_convertion_shading::hdr_convertion_pass(

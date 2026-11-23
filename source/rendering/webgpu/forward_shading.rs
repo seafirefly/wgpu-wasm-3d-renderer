@@ -1,5 +1,6 @@
 use crate::engine;
 use crate::engine::constant;
+use crate::engine::emissive_light;
 use crate::rendering::common;
 use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::shadow;
@@ -165,6 +166,9 @@ struct PbrUniform {
     _light_view_projection: [f32; 16],
     _buffer_type: [f32; 4],
     _camera_position: [f32; 4],
+    _emissive: [f32; 4],
+    _emissive_light_count: [f32; 4],
+    _emissive_lights: [[f32; 28]; emissive_light::MAX_EMISSIVE_LIGHTS],
 }
 
 pub fn create_forward_pbr_shader_context(
@@ -306,6 +310,16 @@ pub fn create_forward_pbr_shader_context(
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                        sample_type: wgpu::TextureSampleType::Depth,
+                    },
+                    count: None,
+                },
             ],
         },
     );
@@ -325,6 +339,12 @@ pub fn create_forward_pbr_shader_context(
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&shadow_resource.shadow_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(
+                    &shadow_resource.point_shadow_array_view,
+                ),
             },
         ],
     });
@@ -647,6 +667,10 @@ fn update_forward_pbr_shading_resource(
             0.0,
         ]);
         uniform_total.extend_from_slice(&[eye.x, eye.y, eye.z, 1.0]);
+        uniform_total.extend_from_slice(&object.emissive_factor(&scene_value.materials));
+        uniform_total.extend_from_slice(&emissive_light::emissive_light_uniform_values(
+            &scene_value.emissive_lights,
+        ));
 
         let uniform_ref: &[f32] = uniform_total.as_ref();
         interface.queue.write_buffer(

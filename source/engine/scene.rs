@@ -15,6 +15,7 @@ pub struct Scene {
     pub materials: Vec<SceneMaterial>,
     pub batched_objects: Vec<SceneObject>,
     pub parameters: SceneParameter,
+    pub emissive_lights: Vec<crate::engine::emissive_light::EmissiveLight>,
 }
 
 // Scene obects
@@ -31,6 +32,21 @@ pub struct SceneObject {
     pub mesh_rendering_resource: Option<Shared<rendering::webgpu::WebGPUMeshRenderingResource>>,
 }
 
+impl SceneObject {
+    /// Emissive radiance of the object's material. Black when the object has no mesh or material.
+    pub fn emissive_factor(&self, materials: &[SceneMaterial]) -> [f32; 4] {
+        let material_index = self
+            .source_mesh
+            .as_ref()
+            .and_then(|mesh| mesh.borrow().material);
+        let emissive = material_index
+            .and_then(|index| materials.get(index as usize))
+            .map(|material| material.emissive_factor)
+            .unwrap_or([0.0; 3]);
+        [emissive[0], emissive[1], emissive[2], 0.0]
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct SceneMaterial {
     pub _name: Option<std::string::String>,
@@ -41,6 +57,9 @@ pub struct SceneMaterial {
     pub normal_texture_size: [u32; 2],
     pub metallic_roughness_texture: Vec<u8>,
     pub metallic_roughness_texture_size: [u32; 2],
+
+    // emissive radiance (emissiveFactor * emissiveStrength)
+    pub emissive_factor: [f32; 3],
 }
 
 // Scene parameters
@@ -209,6 +228,7 @@ impl Scene {
             batched_objects: [].to_vec(),
             materials: [].to_vec(),
             parameters: SceneParameter::new(),
+            emissive_lights: Vec::new(),
         }
     }
 }
@@ -231,7 +251,7 @@ impl SceneParameter {
             // light
             light_parameters: SceneLightParameter {
                 directional_light_angle: [-0.5, -1.0, -1.0],
-                directional_light_intensity: 1.0,
+                directional_light_intensity: 0.0,
                 ambient_light_color: [0.2, 0.2, 0.2, 1.0],
             },
             // scene model
@@ -243,7 +263,7 @@ impl SceneParameter {
             differed_debug_type: 0,
             background_color: [0.0, 0.0, 0.0, 1.0],
             // sky box
-            is_use_sky_box: true,
+            is_use_sky_box: false,
             sky_box_type: SkyBoxType::default(),
             requested_sky_box_type: None,
             sky_box_resolution: SkyBoxResolution::default(),

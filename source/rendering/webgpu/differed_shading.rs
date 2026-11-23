@@ -1,5 +1,6 @@
 use crate::engine;
 use crate::engine::constant;
+use crate::engine::emissive_light;
 use crate::rendering::common;
 use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{
@@ -189,6 +190,7 @@ pub fn create_differed_gbuffer_shader_context(interface: &WebGPUInterface) -> We
         _view_matrix: [f32; 16],
         _projection_matrix: [f32; 16],
         _rotation_matrix: [f32; 16],
+        _emissive: [f32; 4],
     }
 
     let shader: wgpu::ShaderModule =
@@ -523,6 +525,7 @@ fn update_differed_gbuffer_shading_resource(
         uniform_total.extend_from_slice(&view_matrix.to_cols_array());
         uniform_total.extend_from_slice(&projection_matrix.to_cols_array());
         uniform_total.extend_from_slice(&rotaton_matrix.to_cols_array());
+        uniform_total.extend_from_slice(&object.emissive_factor(&scene.materials));
         let uniform_ref: &[f32] = uniform_total.as_ref();
 
         let mesh = mesh_resource.borrow();
@@ -540,6 +543,8 @@ struct DifferedUniform {
     _camera_position: [f32; 4],
     _light_view_projection: [f32; 16],
     _debug: [f32; 4],
+    _emissive_light_count: [f32; 4],
+    _emissive_lights: [[f32; 28]; emissive_light::MAX_EMISSIVE_LIGHTS],
 }
 
 fn create_gbuffer_texture(
@@ -749,6 +754,16 @@ fn create_differed_shading_context(
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -768,6 +783,12 @@ fn create_differed_shading_context(
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&shadow_resource.shadow_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(
+                        &shadow_resource.point_shadow_array_view,
+                    ),
                 },
             ],
             label: Some("Bind group 2"),
@@ -989,6 +1010,9 @@ fn update_differed_shading_buffer(
         0.0,
         0.0,
     ]);
+    uniform_total.extend_from_slice(&emissive_light::emissive_light_uniform_values(
+        &scene_value.emissive_lights,
+    ));
 
     let uniform_ref: &[f32] = uniform_total.as_ref();
     interface

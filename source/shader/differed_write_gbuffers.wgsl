@@ -18,6 +18,7 @@ struct Uniform {
     view_matrix       : mat4x4<f32>,
     projection_matrix : mat4x4<f32>,
     rotation_matrix   : mat4x4<f32>,
+    emissive          : vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> inUniform : Uniform;
@@ -60,10 +61,12 @@ fn fs_main(vertex: VertexOutput) -> FragmentOutput
 
 	var output : FragmentOutput;
 
-    output.position = vec4<f32>(vertex.world_pos, 1.0);
-    output.normal   = vec4<f32>(normalize(tbn_matrix * surface_normal), 1.0);
+    output.position = vec4<f32>(vertex.world_pos, inUniform.emissive.r);
+    output.normal   = vec4<f32>(normalize(tbn_matrix * surface_normal), inUniform.emissive.g);
     output.albedo   = textureSample(base_color_texture, base_color_sampler, vertex.uv);
     output.metallic = textureSample(metallic_roughness_texture, metallic_roughness_sampler, vertex.uv);
+    // emissive blue is stored in the unused alpha of the metallic-roughness target
+    output.metallic.a = inUniform.emissive.b;
 
     return output;
 }

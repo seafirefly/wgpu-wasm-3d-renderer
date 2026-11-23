@@ -147,3 +147,68 @@ fn sample_directional_shadow(
 
   return 1.0 - valid_shadow + shadow_sample * valid_shadow;
 }
+
+const MAX_EMISSIVE_LIGHTS : u32 = 4u;
+
+// Mirrors engine::emissive_light::EmissiveLight (28 floats per light)
+struct EmissiveLight
+{
+  position_area   : vec4<f32>, // xyz: position, w: area
+  radiance        : vec4<f32>, // rgb: radiance
+  normal_layer    : vec4<f32>, // xyz: emitting normal, w: shadow map layer
+  view_projection : mat4x4<f32>,
+}
+
+// Point-approximated emissive triangle. Returns BRDF * n·l * radiance * (area * cos_light / d²), shadow not applied.
+fn emissive_light_direct(
+  light : EmissiveLight,
+  world_position : vec3<f32>,
+  normal : vec3<f32>,
+  view : vec3<f32>,
+  albedo : vec3<f32>,
+  roughness : f32,
+  metallic : f32,
+) -> vec3<f32>
+{
+  let to_light     : vec3<f32> = light.position_area.xyz - world_position;
+  let distance2    : f32       = max(dot(to_light, to_light), 0.0004);
+  let light_dir    : vec3<f32> = to_light * inverseSqrt(distance2);
+  let emit_cos     : f32       = max(dot(light.normal_layer.xyz, -light_dir), 0.0);
+  if (emit_cos <= 0.0) {
+    return vec3<f32>(0.0, 0.0, 0.0);
+  }
+
+  let irradiance_scale : f32 = light.position_area.w * emit_cos / distance2;
+  let lighting = pbr_direct_lighting(normal, view, light_dir, albedo, roughness, metallic);
+  return lighting.direct * light.radiance.rgb * irradiance_scale;
+}
+
+// Returns 1.0 when the point is visible from the emissive light. Samples are taken without early returns (uniform control flow).
+fn sample_point_light_shadow(
+  t_shadow_map : texture_depth_2d_array,
+  s_shadow_map : sampler_comparison,
+  light : EmissiveLight,
+  world_position : vec3<f32>,
+  normal : vec3<f32>,
+) -> f32
+{
+  let offset_position : vec3<f32> = world_position + normal * 0.02;
+  let shadow_clip = light.view_projection * vec4<f32>(offset_position, 1.0);
+  let safe_w = max(abs(shadow_clip.w), 0.000001);
+  let shadow_ndc = shadow_clip.xyz / safe_w;
+  let shadow_uv_raw = vec2<f32>(shadow_ndc.x * 0.5 + 0.5, shadow_ndc.y * -0.5 + 0.5);
+  let shadow_uv = clamp(shadow_uv_raw, vec2<f32>(0.001, 0.001), vec2<f32>(0.999, 0.999));
+  let in_front = select(0.0, 1.0, shadow_clip.w > 0.0);
+  let inside_uv = select(0.0, 1.0,
+    shadow_uv_raw.x > 0.0 && shadow_uv_raw.x < 1.0 && shadow_uv_raw.y > 0.0 && shadow_uv_raw.y < 1.0);
+  let inside_depth = select(0.0, 1.0, shadow_ndc.z > 0.0 && shadow_ndc.z < 1.0);
+  let valid_shadow = in_front * inside_uv * inside_depth;
+
+  let light_dir = safe_normalize(light.position_area.xyz - world_position);
+  let slope_bias = 0.0002 + 0.0003 * (1.0 - max(dot(normal, light_dir), 0.0));
+  let shadow_depth = clamp(shadow_ndc.z - slope_bias, 0.0, 1.0);
+  let layer = i32(light.normal_layer.w);
+  let shadow_sample = textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv, layer, shadow_depth);
+
+  return 1.0 - valid_shadow + shadow_sample * valid_shadow;
+}

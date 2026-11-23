@@ -5,17 +5,20 @@ struct Uniform
     camera_position       : vec4<f32>,
     light_view_projection : mat4x4<f32>,
     debug_params          : vec4<f32>,
+    emissive_light_count  : vec4<f32>,
+    emissive_lights       : array<EmissiveLight, MAX_EMISSIVE_LIGHTS>,
 }
 
 // basic differed
-@group(0) @binding(0) var           t_positon       : texture_2d<f32>;
-@group(0) @binding(1) var           t_normal        : texture_2d<f32>;
-@group(0) @binding(2) var           t_depth         : texture_depth_2d;
-@group(0) @binding(3) var           t_albedo        : texture_2d<f32>;
-@group(0) @binding(4) var           t_metallic      : texture_2d<f32>;
+@group(0) @binding(0) var t_positon       : texture_2d<f32>;
+@group(0) @binding(1) var t_normal        : texture_2d<f32>;
+@group(0) @binding(2) var t_depth         : texture_depth_2d;
+@group(0) @binding(3) var t_albedo        : texture_2d<f32>;
+@group(0) @binding(4) var t_metallic      : texture_2d<f32>;
 @group(1) @binding(0) var<uniform>  u_differd       : Uniform;
 @group(2) @binding(0) var           t_shadow_map    : texture_depth_2d;
 @group(2) @binding(1) var           s_shadow_map    : sampler_comparison;
+@group(2) @binding(2) var           t_point_shadow_maps : texture_depth_2d_array;
 
 // fragment helpers
 
@@ -26,6 +29,7 @@ struct GBufferTexel
   depth              : f32,
   albedo             : vec4<f32>,
   metallic_roughness : vec4<f32>,
+  emissive           : vec3<f32>,
 }
 
 struct Surface
@@ -41,12 +45,16 @@ struct Surface
 fn load_gbuffer(coord : vec4<f32>) -> GBufferTexel
 {
   let texel = vec2<i32>(floor(coord.xy));
+  let position_texel = textureLoad(t_positon, texel, 0);
+  let normal_texel = textureLoad(t_normal, texel, 0);
+  let metallic_texel = textureLoad(t_metallic, texel, 0);
   return GBufferTexel(
-    textureLoad(t_positon, texel, 0).xyz,
-    textureLoad(t_normal, texel, 0).xyz,
+    position_texel.xyz,
+    normal_texel.xyz,
     textureLoad(t_depth, texel, 0),
     textureLoad(t_albedo, texel, 0),
-    textureLoad(t_metallic, texel, 0),
+    metallic_texel,
+    vec3<f32>(position_texel.w, normal_texel.w, metallic_texel.a),
   );
 }
 
@@ -86,6 +94,21 @@ fn direct_radiance(s : Surface) -> vec3<f32>
   return lighting.direct * light_radiance() * shadow_visibility;
 }
 
+// emissive triangles as area lights, each with its own shadow map layer
+fn emissive_radiance(s : Surface) -> vec3<f32>
+{
+  var total = vec3<f32>(0.0, 0.0, 0.0);
+  let count = u32(u_differd.emissive_light_count.x);
+  for (var i = 0u; i < count; i++)
+  {
+    let light = u_differd.emissive_lights[i];
+    let direct = emissive_light_direct(light, s.position, s.normal, s.view, s.albedo, s.roughness, s.metallic);
+    let visibility = sample_point_light_shadow(t_point_shadow_maps, s_shadow_map, light, s.position, s.normal);
+    total += direct * visibility;
+  }
+  return total;
+}
+
 // render functions
 
 @vertex
@@ -110,7 +133,11 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
 
   let s = make_surface(g);
 
-  return vec4<f32>(direct_radiance(s), g.albedo.a);
+  // emissive surfaces only show their own emission, so they are not lit by the emissive lights
+  let is_emissive = max(max(g.emissive.r, g.emissive.g), g.emissive.b) > 0.0;
+  let area_radiance = emissive_radiance(s) * select(1.0, 0.0, is_emissive);
+
+  return vec4<f32>(direct_radiance(s) + area_radiance + g.emissive, g.albedo.a);
 }
 
 @fragment
