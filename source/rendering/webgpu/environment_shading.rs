@@ -4,8 +4,8 @@ use crate::rendering::webgpu::differed_shading::{self, WebGPUDifferedShadingReso
 use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources};
 
-// Uniform layout: view_projection (16) + camera_position (4) + ssr_params (4) + ambient_light (4)
-const ENVIRONMENT_UNIFORM_FLOATS: usize = 28;
+// Uniform layout: view_projection (16) + inv_view_projection (16) + camera_position (4) + ssr_params (4) + ambient_light (4)
+const ENVIRONMENT_UNIFORM_FLOATS: usize = 44;
 
 // Environment shading pass --------------------------------------------------------------------------
 
@@ -38,7 +38,7 @@ pub fn environment_shading_pass(
         && scene.parameters.is_use_environment_map
         && global_resources.hdr_convertion_resource.is_some();
 
-    let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Environment);
+    let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::EnvironmentPass);
     if global_resources.environment_shading_resource.is_none() {
         global_resources.environment_shading_resource =
             Some(create_environment_shading_resource(interface, dsr));
@@ -66,7 +66,7 @@ pub fn environment_shading_pass(
             depth_stencil_attachment: None,
             timestamp_writes: interface
                 .gpu_profiler
-                .timestamp_writes(GpuPassGroup::Environment),
+                .timestamp_writes(GpuPassGroup::EnvironmentPass),
             occlusion_query_set: None,
         });
 
@@ -227,6 +227,7 @@ fn update_environment_shading_uniform(
         100.0,
     );
     let view_projection = projection_matrix * view_matrix;
+    let inv_view_projection = view_projection.inverse();
 
     let ssr_enabled: f32 = if scene.parameters.is_use_ssr {
         1.0
@@ -241,6 +242,7 @@ fn update_environment_shading_uniform(
 
     let mut uniform_total: Vec<f32> = Vec::new();
     uniform_total.extend_from_slice(&view_projection.to_cols_array());
+    uniform_total.extend_from_slice(&inv_view_projection.to_cols_array());
     uniform_total.extend_from_slice(&[eye.x, eye.y, eye.z, 1.0]);
     uniform_total.extend_from_slice(&[ssr_enabled, ibl_enabled, ibl_diffuse_enabled, ibl_specular_enabled]);
     uniform_total.extend_from_slice(&ambient);

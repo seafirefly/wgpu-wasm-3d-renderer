@@ -110,7 +110,7 @@ pub fn create_control_panel(scene: &Shared<Scene>) {
 
     environment(&wrapper, scene);
     camera(&wrapper, scene);
-    base_pass(&wrapper, scene);
+    lighting_pass(&wrapper, scene);
     environment_pass(&wrapper, scene);
     skybox(&wrapper, scene);
     postprocess(&wrapper, scene);
@@ -359,8 +359,8 @@ fn camera(parent: &web_sys::Element, scene: &Shared<Scene>) {
     );
 }
 
-fn base_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
-    let content = dialog(parent, "basepass", "Base pass");
+fn lighting_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
+    let content = dialog(parent, "lightingpass", "Lighting Pass");
     let shading = scene.borrow().parameters.scene_shading_type;
 
     let forward_wrapper = wrapper_div("forward-wrapper", shading == ShadingType::Forward);
@@ -504,8 +504,7 @@ fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
 }
 
 fn environment_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
-    let content = dialog(parent, "environment-pass", "Environment pass");
-
+    let content = dialog(parent, "environment-pass", "Environment Pass");
     let checked = scene.borrow().parameters.is_use_environment_pass;
     append(
         &content,

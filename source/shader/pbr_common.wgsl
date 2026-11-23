@@ -54,6 +54,14 @@ fn safe_normalize(v : vec3<f32>) -> vec3<f32>
   return v * inverseSqrt(len2);
 }
 
+// World position of a pixel rebuilt from its depth (WebGPU 0..1 range). pixel is in texel units, dims is the texture size.
+fn reconstruct_world_position(pixel : vec2<f32>, dims : vec2<f32>, depth : f32, inv_view_projection : mat4x4<f32>) -> vec3<f32>
+{
+  let ndc   = vec4<f32>(pixel.x / dims.x * 2.0 - 1.0, 1.0 - pixel.y / dims.y * 2.0, depth, 1.0);
+  let world = inv_view_projection * ndc;
+  return world.xyz / world.w;
+}
+
 struct PbrLighting
 {
   direct   : vec3<f32>,

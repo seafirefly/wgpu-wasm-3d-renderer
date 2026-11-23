@@ -64,24 +64,31 @@ pub fn differed_shading_pass(
                 .get("DifferedGBuffer")
                 .expect("DifferedGBuffer shader is not exist");
 
-            const GBUFFER_CLEAR_COLORS: [wgpu::Color; 4] = [
-                wgpu::Color::BLACK,
+            const GBUFFER_CLEAR_COLORS: [wgpu::Color; 3] = [
                 wgpu::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 1.0,
-                    a: 1.0,
+                    r: 0.5,
+                    g: 0.5,
+                    b: 0.5,
+                    a: 0.5,
                 },
                 wgpu::Color::BLACK,
                 wgpu::Color::BLACK,
             ];
+            // The 4th attachment is SceneColor: cleared to the background here, then BasePass writes emissive
+            // into it and the Lights pass adds direct lighting on top.
+            let background_color = background_clear_color(scene);
             let color_attachments: [Option<wgpu::RenderPassColorAttachment>; 4] =
                 std::array::from_fn(|i| {
+                    let (attachment_view, clear_color) = if i < 3 {
+                        (&dsr.gbuffer_views[i], GBUFFER_CLEAR_COLORS[i])
+                    } else {
+                        (view, background_color)
+                    };
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &dsr.gbuffer_views[i],
+                        view: attachment_view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(GBUFFER_CLEAR_COLORS[i]),
+                            load: wgpu::LoadOp::Clear(clear_color),
                             store: wgpu::StoreOp::Store,
                         },
                     })
@@ -126,9 +133,9 @@ pub fn differed_shading_pass(
             }
         }
 
-        // differed shading pass
+        // differed shading pass: adds direct lighting onto SceneColor written by the BasePass
         {
-            let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Lighting);
+            let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Lights);
             let is_debug_out = scene.parameters.differed_debug_type != 0;
 
             // render pass setup
@@ -139,19 +146,14 @@ pub fn differed_shading_pass(
                         view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: scene.parameters.background_color[0] as f64,
-                                g: scene.parameters.background_color[1] as f64,
-                                b: scene.parameters.background_color[2] as f64,
-                                a: scene.parameters.background_color[3] as f64,
-                            }),
+                            load: wgpu::LoadOp::Load,
                             store: wgpu::StoreOp::Store,
                         },
                     })],
                     depth_stencil_attachment: None,
                     timestamp_writes: interface
                         .gpu_profiler
-                        .timestamp_writes(GpuPassGroup::Lighting),
+                        .timestamp_writes(GpuPassGroup::Lights),
                     occlusion_query_set: None,
                 });
 
@@ -174,9 +176,18 @@ pub fn differed_shading_pass(
 }
 
 // Differed shading context ---------------------------------------------------------------------------------
+fn background_clear_color(scene: &engine::scene::Scene) -> wgpu::Color {
+    wgpu::Color {
+        r: scene.parameters.background_color[0] as f64,
+        g: scene.parameters.background_color[1] as f64,
+        b: scene.parameters.background_color[2] as f64,
+        a: scene.parameters.background_color[3] as f64,
+    }
+}
+
 pub struct WebGPUDifferedShadingResource {
     pub _shader: wgpu::ShaderModule,
-    pub gbuffer_views: [wgpu::TextureView; 4],
+    pub gbuffer_views: [wgpu::TextureView; 3],
     pub bind_groups: Vec<wgpu::BindGroup>,
     pub uniform_buf: wgpu::Buffer,
     pub render_pipeline: wgpu::RenderPipeline,
@@ -331,21 +342,25 @@ pub fn create_differed_gbuffer_shader_context(interface: &WebGPUInterface) -> We
 entry_point: Some(common::FS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     targets: &[
+                        // normal (RGB10A2)
                         Some(wgpu::ColorTargetState {
-                            format: wgpu::TextureFormat::Rgba16Float,
+                            format: wgpu::TextureFormat::Rgb10a2Unorm,
                             blend: None,
                             write_mask: wgpu::ColorWrites::all(),
                         }),
+                        // albedo
                         Some(wgpu::ColorTargetState {
-                            format: wgpu::TextureFormat::Rgba16Float,
+                            format: wgpu::TextureFormat::Rgba8Unorm,
                             blend: None,
                             write_mask: wgpu::ColorWrites::all(),
                         }),
+                        // metallic roughness
                         Some(wgpu::ColorTargetState {
-                            format: wgpu::TextureFormat::Rgba16Float,
+                            format: wgpu::TextureFormat::Rgba8Unorm,
                             blend: None,
                             write_mask: wgpu::ColorWrites::all(),
                         }),
+                        // SceneColor: emissive
                         Some(wgpu::ColorTargetState {
                             format: wgpu::TextureFormat::Rgba16Float,
                             blend: None,
@@ -542,6 +557,7 @@ struct DifferedUniform {
     _ambient_light: [f32; 4],
     _camera_position: [f32; 4],
     _light_view_projection: [f32; 16],
+    _inv_view_projection: [f32; 16],
     _debug: [f32; 4],
     _emissive_light_count: [f32; 4],
     _emissive_lights: [[f32; 28]; emissive_light::MAX_EMISSIVE_LIGHTS],
@@ -550,6 +566,7 @@ struct DifferedUniform {
 fn create_gbuffer_texture(
     device: &wgpu::Device,
     label: &str,
+    format: wgpu::TextureFormat,
     width: u32,
     height: u32,
 ) -> wgpu::Texture {
@@ -563,7 +580,7 @@ fn create_gbuffer_texture(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba16Float,
+        format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     })
@@ -587,15 +604,14 @@ fn create_differed_shading_context(
 
     let (width, height) = get_canvas_size();
 
-    // Gbuffers
-    let gbuffer_views: [wgpu::TextureView; 4] = [
-        "position texture",
-        "normal texture",
-        "albedo texture",
-        "metallic roughness texture",
+    // Gbuffers (normal, albedo, metallic roughness). The world position is rebuilt from depth instead of stored.
+    let gbuffer_views: [wgpu::TextureView; 3] = [
+        ("normal texture", wgpu::TextureFormat::Rgb10a2Unorm),
+        ("albedo texture", wgpu::TextureFormat::Rgba8Unorm),
+        ("metallic roughness texture", wgpu::TextureFormat::Rgba8Unorm),
     ]
-    .map(|label| {
-        create_gbuffer_texture(&interface.device, label, width, height)
+    .map(|(label, format)| {
+        create_gbuffer_texture(&interface.device, label, format, width, height)
             .create_view(&wgpu::TextureViewDescriptor::default())
     });
 
@@ -606,16 +622,6 @@ fn create_differed_shading_context(
         .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -669,12 +675,8 @@ fn create_differed_shading_context(
                 layout: &gbuffer_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&gbuffer_views[0]),
-                    },
-                    wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&gbuffer_views[1]),
+                        resource: wgpu::BindingResource::TextureView(&gbuffer_views[0]),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
@@ -682,11 +684,11 @@ fn create_differed_shading_context(
                     },
                     wgpu::BindGroupEntry {
                         binding: 3,
-                        resource: wgpu::BindingResource::TextureView(&gbuffer_views[2]),
+                        resource: wgpu::BindingResource::TextureView(&gbuffer_views[1]),
                     },
                     wgpu::BindGroupEntry {
                         binding: 4,
-                        resource: wgpu::BindingResource::TextureView(&gbuffer_views[3]),
+                        resource: wgpu::BindingResource::TextureView(&gbuffer_views[2]),
                     },
                 ],
                 label: Some("Bind group 0"),
@@ -825,7 +827,23 @@ fn create_differed_shading_context(
                     module: &shader,
                     entry_point: Some(common::FS_ENTRY_POINT),
                     compilation_options: Default::default(),
-                    targets: &[Some(interface.intermediate_texture.format().into())],
+                    // Adds direct lighting onto SceneColor; alpha keeps the destination (albedo alpha)
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: interface.intermediate_texture.format(),
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::One,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::Zero,
+                                dst_factor: wgpu::BlendFactor::One,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                        }),
+                        write_mask: wgpu::ColorWrites::all(),
+                    })],
                 }),
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
@@ -998,12 +1016,25 @@ fn update_differed_shading_buffer(
     let ambient: [f32; 4] = scene_value.parameters.light_parameters.ambient_light_color;
     let camera_position: [f32; 4] = [eye.x, eye.y, eye.z, 1.0];
 
+    // Same view and projection as the deferred gbuffer pass; the inverse rebuilds world positions from depth
+    let (width, height) = get_canvas_size();
+    let aspect_ratio: f32 = width as f32 / height as f32;
+    let view_matrix = glam::Mat4::look_to_rh(eye, scene_value.parameters.eye_direction, glam::Vec3::Z);
+    let projection_matrix = glam::Mat4::perspective_rh(
+        scene_value.parameters.fov_y_degrees.to_radians(),
+        aspect_ratio,
+        0.01,
+        100.0,
+    );
+    let inv_view_projection = (projection_matrix * view_matrix).inverse();
+
     let mut uniform_total: Vec<f32> = Vec::new();
     uniform_total.extend_from_slice(&directional_angle.to_array());
     uniform_total.extend_from_slice(&[directional_intensity]);
     uniform_total.extend_from_slice(&ambient);
     uniform_total.extend_from_slice(&camera_position);
     uniform_total.extend_from_slice(&shadow_resource.light_view_projection.to_cols_array());
+    uniform_total.extend_from_slice(&inv_view_projection.to_cols_array());
     uniform_total.extend_from_slice(&[
         scene_value.parameters.differed_debug_type as f32,
         0.0,

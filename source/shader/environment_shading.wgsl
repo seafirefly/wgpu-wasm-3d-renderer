@@ -1,6 +1,7 @@
 struct EnvUniform
 {
-    view_projection : mat4x4<f32>,
+    view_projection     : mat4x4<f32>,
+    inv_view_projection : mat4x4<f32>,
     camera_position : vec4<f32>,
     // x: 1.0 when screen space reflection is enabled, y: 1.0 when IBL is available, z: 1.0 when IBL diffuse is enabled, w: 1.0 when IBL specular is enabled
     ssr_params      : vec4<f32>,
@@ -13,8 +14,7 @@ const SSR_MAX_DISTANCE : f32 = 20.0;
 // Allowed depth gap behind the surface, relative to the distance from the camera
 const SSR_THICKNESS    : f32 = 0.05;
 
-// deferred gbuffers (same layout as the deferred lighting pass)
-@group(0) @binding(0) var t_positon : texture_2d<f32>;
+// deferred gbuffers (same layout as the deferred lighting pass; binding 0 was the position target)
 @group(0) @binding(1) var t_normal  : texture_2d<f32>;
 @group(0) @binding(2) var t_depth   : texture_depth_2d;
 @group(0) @binding(3) var t_albedo  : texture_2d<f32>;
@@ -26,6 +26,13 @@ const SSR_THICKNESS    : f32 = 0.05;
 @group(2) @binding(2) var s_env        : sampler;
 // lit scene color before the environment terms are added
 @group(3) @binding(0) var t_scene      : texture_2d<f32>;
+
+// World position of the surface stored at texel, rebuilt from the depth buffer
+fn gbuffer_position(texel : vec2<i32>) -> vec3<f32>
+{
+    let dims : vec2<f32> = vec2<f32>(textureDimensions(t_depth));
+    return reconstruct_world_position(vec2<f32>(texel) + 0.5, dims, textureLoad(t_depth, texel, 0), u_env.inv_view_projection);
+}
 
 // Marches the reflection ray in screen space. Returns rgb = hit color, a = hit confidence.
 fn screen_space_reflection(origin : vec3<f32>, dir : vec3<f32>) -> vec4<f32>
@@ -58,7 +65,7 @@ fn screen_space_reflection(origin : vec3<f32>, dir : vec3<f32>) -> vec4<f32>
         }
 
         // The ray has passed behind the visible surface at this pixel: treat it as a hit when it is close enough
-        let stored_distance : f32 = length(textureLoad(t_positon, texel, 0).xyz - eye);
+        let stored_distance : f32 = length(gbuffer_position(texel) - eye);
         let ray_distance    : f32 = length(p - eye);
         if (ray_distance > stored_distance && ray_distance - stored_distance < SSR_THICKNESS * stored_distance)
         {
@@ -93,8 +100,8 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
         return scene;
     }
 
-    let position  : vec3<f32> = textureLoad(t_positon, texel, 0).xyz;
-    let normal    : vec3<f32> = safe_normalize(textureLoad(t_normal, texel, 0).xyz);
+    let position  : vec3<f32> = gbuffer_position(texel);
+    let normal    : vec3<f32> = safe_normalize(textureLoad(t_normal, texel, 0).xyz * 2.0 - 1.0);
     let albedo    : vec3<f32> = textureLoad(t_albedo, texel, 0).rgb;
     let mr        : vec4<f32> = textureLoad(t_metallic, texel, 0);
     let roughness : f32       = clamp(mr.g, 0.045, 1.0);

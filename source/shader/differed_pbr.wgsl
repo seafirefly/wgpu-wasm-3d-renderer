@@ -4,13 +4,13 @@ struct Uniform
     ambient_light         : vec4<f32>,
     camera_position       : vec4<f32>,
     light_view_projection : mat4x4<f32>,
+    inv_view_projection   : mat4x4<f32>,
     debug_params          : vec4<f32>,
     emissive_light_count  : vec4<f32>,
     emissive_lights       : array<EmissiveLight, MAX_EMISSIVE_LIGHTS>,
 }
 
-// basic differed
-@group(0) @binding(0) var t_positon       : texture_2d<f32>;
+// basic differed (binding 0 was the position target, now rebuilt from depth)
 @group(0) @binding(1) var t_normal        : texture_2d<f32>;
 @group(0) @binding(2) var t_depth         : texture_depth_2d;
 @group(0) @binding(3) var t_albedo        : texture_2d<f32>;
@@ -29,7 +29,7 @@ struct GBufferTexel
   depth              : f32,
   albedo             : vec4<f32>,
   metallic_roughness : vec4<f32>,
-  emissive           : vec3<f32>,
+  is_emissive        : bool,
 }
 
 struct Surface
@@ -45,16 +45,17 @@ struct Surface
 fn load_gbuffer(coord : vec4<f32>) -> GBufferTexel
 {
   let texel = vec2<i32>(floor(coord.xy));
-  let position_texel = textureLoad(t_positon, texel, 0);
+  let depth = textureLoad(t_depth, texel, 0);
   let normal_texel = textureLoad(t_normal, texel, 0);
   let metallic_texel = textureLoad(t_metallic, texel, 0);
+  let dims = vec2<f32>(textureDimensions(t_depth));
   return GBufferTexel(
-    position_texel.xyz,
-    normal_texel.xyz,
-    textureLoad(t_depth, texel, 0),
+    reconstruct_world_position(coord.xy, dims, depth, u_differd.inv_view_projection),
+    normal_texel.xyz * 2.0 - 1.0,
+    depth,
     textureLoad(t_albedo, texel, 0),
     metallic_texel,
-    vec3<f32>(position_texel.w, normal_texel.w, metallic_texel.a),
+    metallic_texel.a > 0.5,
   );
 }
 
@@ -134,10 +135,10 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
   let s = make_surface(g);
 
   // emissive surfaces only show their own emission, so they are not lit by the emissive lights
-  let is_emissive = max(max(g.emissive.r, g.emissive.g), g.emissive.b) > 0.0;
-  let area_radiance = emissive_radiance(s) * select(1.0, 0.0, is_emissive);
+  // (emissive radiance itself is already in SceneColor)
+  let area_radiance = emissive_radiance(s) * select(1.0, 0.0, g.is_emissive);
 
-  return vec4<f32>(direct_radiance(s) + area_radiance + g.emissive, g.albedo.a);
+  return vec4<f32>(direct_radiance(s) + area_radiance, g.albedo.a);
 }
 
 @fragment

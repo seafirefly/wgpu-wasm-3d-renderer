@@ -7,10 +7,13 @@ struct VertexOutput {
 };
 
 struct FragmentOutput {
-    @location(0) position : vec4<f32>,
-    @location(1) normal   : vec4<f32>,
-    @location(2) albedo   : vec4<f32>,
-    @location(3) metallic : vec4<f32>,
+    // RGB10A2: normal encoded to [0, 1]
+    @location(0) normal   : vec4<f32>,
+    @location(1) albedo   : vec4<f32>,
+    // alpha flags emissive surfaces
+    @location(2) metallic : vec4<f32>,
+    // SceneColor: emissive radiance (alpha keeps albedo alpha)
+    @location(3) scene_color : vec4<f32>,
 }
 
 struct Uniform {
@@ -61,12 +64,12 @@ fn fs_main(vertex: VertexOutput) -> FragmentOutput
 
 	var output : FragmentOutput;
 
-    output.position = vec4<f32>(vertex.world_pos, inUniform.emissive.r);
-    output.normal   = vec4<f32>(normalize(tbn_matrix * surface_normal), inUniform.emissive.g);
+    output.normal   = vec4<f32>(normalize(tbn_matrix * surface_normal) * 0.5 + 0.5, 1.0);
     output.albedo   = textureSample(base_color_texture, base_color_sampler, vertex.uv);
     output.metallic = textureSample(metallic_roughness_texture, metallic_roughness_sampler, vertex.uv);
-    // emissive blue is stored in the unused alpha of the metallic-roughness target
-    output.metallic.a = inUniform.emissive.b;
+    let is_emissive = max(max(inUniform.emissive.r, inUniform.emissive.g), inUniform.emissive.b) > 0.0;
+    output.metallic.a = select(0.0, 1.0, is_emissive);
+    output.scene_color = vec4<f32>(inUniform.emissive.rgb, output.albedo.a);
 
     return output;
 }

@@ -12,9 +12,9 @@ pub const GROUP_COUNT: usize = 9;
 pub enum GpuPassGroup {
     Shadow,
     BasePass,
-    Lighting,
+    Lights,
+    EnvironmentPass,
     Sky,
-    Environment,
     DepthOfField,
     Bloom,
     Composite,
@@ -25,9 +25,9 @@ impl GpuPassGroup {
     pub const ALL: [GpuPassGroup; GROUP_COUNT] = [
         GpuPassGroup::Shadow,
         GpuPassGroup::BasePass,
-        GpuPassGroup::Lighting,
+        GpuPassGroup::Lights,
+        GpuPassGroup::EnvironmentPass,
         GpuPassGroup::Sky,
-        GpuPassGroup::Environment,
         GpuPassGroup::DepthOfField,
         GpuPassGroup::Bloom,
         GpuPassGroup::Composite,
@@ -37,10 +37,10 @@ impl GpuPassGroup {
     pub fn label(self) -> &'static str {
         match self {
             GpuPassGroup::Shadow => "Shadow",
-            GpuPassGroup::BasePass => "Base pass",
-            GpuPassGroup::Lighting => "Lighting",
+            GpuPassGroup::BasePass => "Base Pass",
+            GpuPassGroup::Lights => "Lighting",
             GpuPassGroup::Sky => "Sky",
-            GpuPassGroup::Environment => "Environment",
+            GpuPassGroup::EnvironmentPass => "Environment",
             GpuPassGroup::DepthOfField => "Depth of field",
             GpuPassGroup::Bloom => "Bloom",
             GpuPassGroup::Composite => "Composite",
