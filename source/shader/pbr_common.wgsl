@@ -1,4 +1,4 @@
-// Shared PBR helpers. Concatenated in front of differed_pbr.wgsl and forward_pbr.wgsl.
+// Shared PBR helpers. Concatenated in front of deferred_pbr.wgsl and forward_pbr.wgsl.
 
 const PI : f32 = radians(180.0);
 const GGX_D_EPSILON : f32 = 0.0000001;

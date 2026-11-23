@@ -7,7 +7,7 @@ use wgpu::util::DeviceExt;
 pub mod bloom_shading;
 pub mod composite_shading;
 pub mod dof_shading;
-pub mod differed_shading;
+pub mod deferred_shading;
 pub mod diffuse_indirect_shading;
 pub mod environment_shading;
 pub mod forward_shading;
@@ -69,7 +69,7 @@ pub struct WebGPUMeshRenderingResource {
 
 // Unique resources that are shared in the whole rendering process. It is created once and shared between objects.
 pub struct WebGPUUniqueResources {
-    pub differed_shading_resource: Option<differed_shading::WebGPUDifferedShadingResource>,
+    pub deferred_shading_resource: Option<deferred_shading::WebGPUDeferredShadingResource>,
     pub diffuse_indirect_resource: Option<diffuse_indirect_shading::WebGPUDiffuseIndirectResource>,
     pub line_grid_shading_resource: Option<line_grid_shading::WebGPULineGridShadingResource>,
     pub dof_shading_resource: Option<dof_shading::WebGPUDofShadingResource>,
@@ -280,8 +280,8 @@ pub fn update_rendering_main(
             );
         }
 
-        engine::scene::ShadingType::Differed => {
-            differed_shading::differed_shading_pass(
+        engine::scene::ShadingType::Deferred => {
+            deferred_shading::deferred_shading_pass(
                 interface,
                 scene,
                 shader_map,
@@ -293,7 +293,7 @@ pub fn update_rendering_main(
     }
 
     // [Environment] Diffuse and specular environment lighting (SSR first, prefiltered map as fallback)
-    let is_environment_pass = global_resources.differed_shading_resource.is_some()
+    let is_environment_pass = global_resources.deferred_shading_resource.is_some()
         && environment_shading::is_environment_pass_active(scene);
     if is_environment_pass {
         environment_shading::environment_shading_pass(

@@ -149,6 +149,15 @@ body {
 [id^="cpu-"][id$="-analytics-value"] {
 	white-space: nowrap;
 }
+#dialog-element-performance .widget-label {
+	width: 60%;
+}
+#dialog-element-performance .widget-value {
+	width: 40%;
+}
+#dialog-element-performance .accordion-value {
+	left: calc(60% + 0.4px);
+}
 .widget-separator{
 	height: 1px;
 	margin: 5px;

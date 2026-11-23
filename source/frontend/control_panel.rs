@@ -46,10 +46,11 @@ const SCENE_MODELS: [(&str, SceneModel); 3] = [
 const SCENE_MODELS: [(&str, SceneModel); 1] =
     [("cornell_box", SceneModel::CornellBox)];
 
-const SKY_BOX_TYPES: [(&str, SkyBoxType); 3] = [
-    ("kloofendal", SkyBoxType::Kloofendal48dPartlyCloudy),
-    ("studio", SkyBoxType::StudioSmall09),
-    ("fireplace", SkyBoxType::Fireplace),
+const SKY_BOX_OPTIONS: [(&str, Option<SkyBoxType>); 4] = [
+    ("none", None),
+    ("kloofendal", Some(SkyBoxType::Kloofendal48dPartlyCloudy)),
+    ("studio", Some(SkyBoxType::StudioSmall09)),
+    ("fireplace", Some(SkyBoxType::Fireplace)),
 ];
 
 #[cfg(debug_assertions)]
@@ -65,8 +66,8 @@ const SKY_BOX_RESOLUTIONS: [(&str, SkyBoxResolution); 1] = [
 ];
 
 const RENDER_TYPES: [(&str, ShadingType); 2] = [
-    ("forward", ShadingType::Forward),
-    ("differed", ShadingType::Differed),
+    ("deferred", ShadingType::Deferred),
+    ("forward*", ShadingType::Forward),
 ];
 
 const FORWARD_DISPLAY: [(&str, u8); 2] = [("render", 0), ("normal", 1)];
@@ -112,13 +113,12 @@ pub fn create_control_panel(scene: &Shared<Scene>) {
     camera(&wrapper, scene);
     lighting_pass(&wrapper, scene);
     environment_pass(&wrapper, scene);
-    skybox(&wrapper, scene);
     postprocess(&wrapper, scene);
     overlay(&wrapper, scene);
-    statistics(&wrapper, scene);
     performance(&wrapper);
 
     append(&gloo::utils::body(), &wrapper);
+    set_skybox_dependents_disabled(!scene.borrow().parameters.is_use_sky_box);
 }
 
 pub fn update_performance_statistics(average_frame_time_ms: f64, frames_per_second: f64) {
@@ -218,6 +218,12 @@ pub fn update_gpu_statistics(
     };
     update_statistic("accordion-performance-cpu-label", &cpu_label);
 
+    let gpu_lighting = ms_text(timings.and_then(|t| group_sum_ms(&t.group_ms, is_lighting)));
+    update_statistic("accordion-performance-gpu-lighting-value", &gpu_lighting);
+
+    let cpu_lighting = ms_text(cpu_timings.and_then(|t| group_sum_ms(&t.group_ms, is_lighting)));
+    update_statistic("accordion-performance-cpu-lighting-value", &cpu_lighting);
+
     let gpu_postprocess = ms_text(timings.and_then(|t| group_sum_ms(&t.group_ms, is_postprocess)));
     update_statistic("accordion-performance-gpu-postprocess-value", &gpu_postprocess);
 
@@ -256,6 +262,7 @@ fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
         s.parameters.requested_scene_model = Some(v);
     });
     append(&content, &widget_row("Scene", &[&value_wrapper(&model)]));
+    skybox(&content, scene);
 
     let directional = accordion(&content, "directional", "Directional Light", true);
     for (index, &(id, label)) in DIRECTIONAL_AXES.iter().enumerate() {
@@ -318,6 +325,28 @@ fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
             }),
         );
     }
+
+    let information = accordion(&content, "information", "Information", true);
+    let (objects, materials, lights) = {
+        let scene = scene.borrow();
+        (
+            scene.objects.len(),
+            scene.materials.len(),
+            scene.emissive_lights.len(),
+        )
+    };
+    append(
+        &information,
+        &stat_row("Objects", "objects-analytics-value", objects),
+    );
+    append(
+        &information,
+        &stat_row("Materials", "materials-analytics-value", materials),
+    );
+    append(
+        &information,
+        &stat_row("Lights", "lights-analytics-value", lights),
+    );
 }
 
 fn camera(parent: &web_sys::Element, scene: &Shared<Scene>) {
@@ -378,17 +407,17 @@ fn lighting_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
     let shading = scene.borrow().parameters.scene_shading_type;
 
     let forward_wrapper = wrapper_div("forward-wrapper", shading == ShadingType::Forward);
-    let differed_wrapper = wrapper_div("differed-wrapper", shading == ShadingType::Differed);
+    let deferred_wrapper = wrapper_div("deferred-wrapper", shading == ShadingType::Deferred);
 
     let render_type = select("render-type-select", &RENDER_TYPES, Some(shading));
     {
         let forward_wrapper = forward_wrapper.clone();
-        let differed_wrapper = differed_wrapper.clone();
+        let deferred_wrapper = deferred_wrapper.clone();
         on_select(scene, &render_type, &RENDER_TYPES, move |s, shading| {
             s.parameters.scene_shading_type = shading;
             let is_forward = shading == ShadingType::Forward;
             forward_wrapper.set_class_name(wrapper_class(is_forward));
-            differed_wrapper.set_class_name(wrapper_class(!is_forward));
+            deferred_wrapper.set_class_name(wrapper_class(!is_forward));
         });
     }
     append(&content, &widget_row("Rendering type", &[&render_type]));
@@ -406,18 +435,18 @@ fn lighting_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
     append(&forward_wrapper, &widget_row("out", &[&forward_display]));
     append(&content, &forward_wrapper);
 
-    let differed_shading = select("differed-type-select", &[("pbr", 0u8)], Some(0u8));
+    let deferred_shading = select("deferred-type-select", &[("pbr", 0u8)], Some(0u8));
     append(
-        &differed_wrapper,
-        &widget_row("shading", &[&differed_shading]),
+        &deferred_wrapper,
+        &widget_row("shading", &[&deferred_shading]),
     );
 
     let buffer_type = select("buffer-type-select", &BUFFER_TYPES, None);
     on_select(scene, &buffer_type, &BUFFER_TYPES, |s, v| {
-        s.parameters.differed_debug_type = v;
+        s.parameters.deferred_debug_type = v;
     });
-    append(&differed_wrapper, &widget_row("out", &[&buffer_type]));
-    append(&content, &differed_wrapper);
+    append(&deferred_wrapper, &widget_row("out", &[&buffer_type]));
+    append(&content, &deferred_wrapper);
 
     let bg = scene.borrow().parameters.background_color;
     let hex = format!(
@@ -509,28 +538,26 @@ fn wrapper_div(id: &str, active: bool) -> web_sys::Element {
     wrapper
 }
 
-fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
-    let content = dialog(parent, "skybox", "Skybox");
-
-    let checked = scene.borrow().parameters.is_use_sky_box;
-    append(
-        &content,
-        &checkbox_row(scene, "Active", "skybox-active", checked, |s, v| {
-            s.parameters.is_use_sky_box = v;
-        }),
-    );
-
-    let environment_map_checked = scene.borrow().parameters.is_use_environment_map;
+fn skybox(content: &web_sys::Element, scene: &Shared<Scene>) {
+    let (is_use_sky_box, sky_box_type) = {
+        let scene = scene.borrow();
+        (scene.parameters.is_use_sky_box, scene.parameters.sky_box_type)
+    };
     let sky_box = select(
         "sky-box-select",
-        &SKY_BOX_TYPES,
-        Some(scene.borrow().parameters.sky_box_type),
+        &SKY_BOX_OPTIONS,
+        Some(is_use_sky_box.then_some(sky_box_type)),
     );
-    on_select(scene, &sky_box, &SKY_BOX_TYPES, |s, v| {
-        s.parameters.requested_sky_box_type = Some(v);
+    on_select(scene, &sky_box, &SKY_BOX_OPTIONS, |s, v| {
+        s.parameters.is_use_sky_box = v.is_some();
+        if let Some(sky_box_type) = v {
+            s.parameters.requested_sky_box_type = Some(sky_box_type);
+        }
+        set_skybox_dependents_disabled(v.is_none());
     });
-    append(&content, &widget_row("File", &[&value_wrapper(&sky_box)]));
+    append(content, &widget_row("Skybox", &[&value_wrapper(&sky_box)]));
 
+    let resolution_wrapper = div("widget-wrapper");
     let sky_box_resolution = select(
         "sky-box-resolution-select",
         &SKY_BOX_RESOLUTIONS,
@@ -540,32 +567,29 @@ fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
         s.parameters.requested_sky_box_resolution = Some(v);
     });
     append(
-        &content,
+        &resolution_wrapper,
         &widget_row("Resolution", &[&value_wrapper(&sky_box_resolution)]),
     );
+    append(content, &resolution_wrapper);
+}
 
-    append(
-        &content,
-        &checkbox_row(
-            scene,
-            "Env Map",
-            "environment-map-active",
-            environment_map_checked,
-            |s, v| {
-                s.parameters.is_use_environment_map = v;
-            },
-        ),
-    );
 
-    let ibl_debug = select(
+fn set_skybox_dependents_disabled(disabled: bool) {
+    for id in [
+        "ibl-diffuse-active",
+        "ibl-specular-active",
         "ibl-debug-select",
-        &IBL_DEBUG_TYPES,
-        Some(scene.borrow().parameters.ibl_debug_type),
-    );
-    on_select(scene, &ibl_debug, &IBL_DEBUG_TYPES, |s, v| {
-        s.parameters.ibl_debug_type = v;
-    });
-    append(&content, &widget_row("IBL out", &[&value_wrapper(&ibl_debug)]));
+        "sky-box-resolution-select",
+    ] {
+        let element = gloo::utils::document()
+            .get_element_by_id(id)
+            .expect("IBL control element should exist");
+        if disabled {
+            element.set_attribute("disabled", "").unwrap();
+        } else {
+            element.remove_attribute("disabled").unwrap();
+        }
+    }
 }
 
 fn environment_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
@@ -593,6 +617,16 @@ fn environment_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
             s.parameters.is_use_ibl_specular = v;
         }),
     );
+
+    let ibl_debug = select(
+        "ibl-debug-select",
+        &IBL_DEBUG_TYPES,
+        Some(scene.borrow().parameters.ibl_debug_type),
+    );
+    on_select(scene, &ibl_debug, &IBL_DEBUG_TYPES, |s, v| {
+        s.parameters.ibl_debug_type = v;
+    });
+    append(&content, &widget_row("IBL debug", &[&value_wrapper(&ibl_debug)]));
 
     let checked = scene.borrow().parameters.is_use_ssr;
     append(
@@ -806,31 +840,6 @@ fn overlay(parent: &web_sys::Element, scene: &Shared<Scene>) {
     );
 }
 
-fn statistics(parent: &web_sys::Element, scene: &Shared<Scene>) {
-    let content = dialog(parent, "analytics", "Statistics");
-    let (objects, materials, lights) = {
-        let scene = scene.borrow();
-        (
-            scene.objects.len(),
-            scene.materials.len(),
-            scene.emissive_lights.len(),
-        )
-    };
-
-    append(
-        &content,
-        &stat_row("Objects", "objects-analytics-value", objects),
-    );
-    append(
-        &content,
-        &stat_row("Materials", "materials-analytics-value", materials),
-    );
-    append(
-        &content,
-        &stat_row("Lights", "lights-analytics-value", lights),
-    );
-}
-
 fn performance(parent: &web_sys::Element) {
     let content = dialog(parent, "performance", "Performance");
 
@@ -875,11 +884,27 @@ fn ms_text(ms: Option<f64>) -> String {
     }
 }
 
+fn is_lighting(group: GpuPassGroup) -> bool {
+    matches!(
+        group,
+        GpuPassGroup::BasePass | GpuPassGroup::DiffuseIndirect | GpuPassGroup::Lights
+    )
+}
+
 fn pass_rows(parent: &web_sys::Element, name: &str, row_id: fn(usize) -> String) {
+    let mut lighting = None;
     for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
-        if !is_postprocess(*group) && !is_overlay(*group) {
+        if is_lighting(*group) {
+            let lighting = lighting.get_or_insert_with(|| {
+                accordion(parent, &format!("performance-{name}-lighting"), "Lighting", true)
+            });
+            append(lighting, &stat_row(group.label(), &row_id(index), 0));
+        } else if !is_postprocess(*group) && !is_overlay(*group) {
             append(parent, &stat_row(group.label(), &row_id(index), 0));
         }
+    }
+    if lighting.is_some() {
+        accordion_value(parent, &format!("performance-{name}-lighting"));
     }
 
     let postprocess = accordion(

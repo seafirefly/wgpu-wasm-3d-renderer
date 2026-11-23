@@ -1,6 +1,6 @@
 use crate::engine;
 use crate::rendering::common;
-use crate::rendering::webgpu::differed_shading::{self, WebGPUDifferedShadingResource};
+use crate::rendering::webgpu::deferred_shading::{self, WebGPUDeferredShadingResource};
 use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::WebGPUInterface;
 use std::cell::Cell;
@@ -24,7 +24,7 @@ pub fn diffuse_indirect_pass(
     interface: &WebGPUInterface,
     scene: &engine::scene::Scene,
     command_encoder: &mut wgpu::CommandEncoder,
-    dsr: &WebGPUDifferedShadingResource,
+    dsr: &WebGPUDeferredShadingResource,
     resource: &WebGPUDiffuseIndirectResource,
 ) {
     let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::DiffuseIndirect);
@@ -452,7 +452,7 @@ pub fn create_diffuse_indirect_resource(interface: &WebGPUInterface) -> WebGPUDi
 
 fn create_gbuffer_bind_group(
     interface: &WebGPUInterface,
-    dsr: &WebGPUDifferedShadingResource,
+    dsr: &WebGPUDeferredShadingResource,
     resource: &WebGPUDiffuseIndirectResource,
 ) -> wgpu::BindGroup {
     let depth_view = interface
@@ -528,7 +528,7 @@ fn create_temporal_bind_group(
 
 fn create_denoise_bind_group(
     interface: &WebGPUInterface,
-    dsr: &WebGPUDifferedShadingResource,
+    dsr: &WebGPUDeferredShadingResource,
     resource: &WebGPUDiffuseIndirectResource,
     parity: usize,
 ) -> wgpu::BindGroup {
@@ -560,7 +560,7 @@ fn update_diffuse_indirect_uniform(
     resource: &WebGPUDiffuseIndirectResource,
 ) {
     // Same view and projection as the deferred gbuffer pass, so the screen projection matches the stored world positions
-    let (width, height) = differed_shading::get_canvas_size();
+    let (width, height) = deferred_shading::get_canvas_size();
     let aspect_ratio: f32 = width as f32 / height as f32;
 
     let eye: glam::Vec3 = scene.parameters.eye_location;

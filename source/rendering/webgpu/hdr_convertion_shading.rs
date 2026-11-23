@@ -33,7 +33,7 @@ pub fn update_sky_box(
     parameters.sky_box_resolution = sky_box_resolution;
 
     global_resources.hdr_convertion_resource = None;
-    global_resources.differed_shading_resource = None;
+    global_resources.deferred_shading_resource = None;
     global_resources.sky_shading_resource = None;
     *global_resources.sky_hdr_image.borrow_mut() = None;
     global_resources.sky_hdr_load_started = false;
@@ -95,8 +95,8 @@ pub fn hdr_convertion_pass(
             &interface,
             sky_hdr_image,
         ));
-        // The differed shading bind groups reference the IBL textures, so they must be rebuilt.
-        global_resources.differed_shading_resource = None;
+        // The deferred shading bind groups reference the IBL textures, so they must be rebuilt.
+        global_resources.deferred_shading_resource = None;
 
         let cube_size = global_resources
             .hdr_convertion_resource

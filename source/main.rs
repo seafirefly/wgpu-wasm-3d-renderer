@@ -86,7 +86,7 @@ pub async fn main() {
 
     // Global unique resources that are shared in the whole rendering process. It is created once and shared between objects.
     let mut global_resources: WebGPUUniqueResources = WebGPUUniqueResources {
-        differed_shading_resource: None,
+        deferred_shading_resource: None,
         diffuse_indirect_resource: None,
         line_grid_shading_resource: None,
         dof_shading_resource: None,

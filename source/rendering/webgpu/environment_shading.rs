@@ -1,6 +1,6 @@
 use crate::engine;
 use crate::rendering::common;
-use crate::rendering::webgpu::differed_shading::{self, WebGPUDifferedShadingResource};
+use crate::rendering::webgpu::deferred_shading::{self, WebGPUDeferredShadingResource};
 use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources};
 
@@ -14,8 +14,8 @@ const ENVIRONMENT_UNIFORM_FLOATS: usize = 44;
 pub fn is_environment_pass_active(scene: &engine::scene::Scene) -> bool {
     matches!(
         scene.parameters.scene_shading_type,
-        engine::scene::ShadingType::Differed
-    ) && scene.parameters.differed_debug_type == 0
+        engine::scene::ShadingType::Deferred
+    ) && scene.parameters.deferred_debug_type == 0
 }
 
 /// Reads the lit HDR scene (intermediate_texture) and writes it with environment lighting added to intermediate_texture_2.
@@ -26,7 +26,7 @@ pub fn environment_shading_pass(
     command_encoder: &mut wgpu::CommandEncoder,
     global_resources: &mut WebGPUUniqueResources,
 ) {
-    let Some(dsr) = global_resources.differed_shading_resource.as_ref() else {
+    let Some(dsr) = global_resources.deferred_shading_resource.as_ref() else {
         return;
     };
     if !is_environment_pass_active(scene) {
@@ -90,7 +90,7 @@ pub struct WebGPUEnvironmentShadingResource {
 
 fn create_environment_shading_resource(
     interface: &WebGPUInterface,
-    dsr: &WebGPUDifferedShadingResource,
+    dsr: &WebGPUDeferredShadingResource,
 ) -> WebGPUEnvironmentShadingResource {
     let device = &interface.device;
 
@@ -214,7 +214,7 @@ fn update_environment_shading_uniform(
     is_ibl_available: bool,
 ) {
     // Same view and projection as the deferred gbuffer pass, so the screen projection matches the stored world positions
-    let (width, height) = differed_shading::get_canvas_size();
+    let (width, height) = deferred_shading::get_canvas_size();
     let aspect_ratio: f32 = width as f32 / height as f32;
 
     let eye: glam::Vec3 = scene.parameters.eye_location;

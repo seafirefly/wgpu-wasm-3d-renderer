@@ -79,7 +79,7 @@ pub struct SceneParameter {
     // rendering config
     pub scene_shading_type: ShadingType,
     pub forward_debug_type: u8,
-    pub differed_debug_type: u8,
+    pub deferred_debug_type: u8,
     pub background_color: [f32; 4],
     // sky box
     pub is_use_sky_box: bool,
@@ -216,7 +216,7 @@ pub enum CompositeViewTransform {
 pub enum ShadingType {
     #[default]
     Forward,
-    Differed,
+    Deferred,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -265,9 +265,9 @@ impl SceneParameter {
             scene_model: SceneModel::default(),
             requested_scene_model: None,
             // rendering
-            scene_shading_type: ShadingType::Differed,
+            scene_shading_type: ShadingType::Deferred,
             forward_debug_type: 0,
-            differed_debug_type: 0,
+            deferred_debug_type: 0,
             background_color: [0.0, 0.0, 0.0, 1.0],
             // sky box
             is_use_sky_box: false,

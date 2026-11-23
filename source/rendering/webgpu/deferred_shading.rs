@@ -10,9 +10,9 @@ use crate::rendering::webgpu::{
 };
 use wasm_bindgen::JsCast;
 
-// Differed shading pass -----------------------------------------------------------------------------
+// Deferred shading pass -----------------------------------------------------------------------------
 
-pub fn differed_shading_pass(
+pub fn deferred_shading_pass(
     interface: &WebGPUInterface,
     scene: &engine::scene::Scene,
     shader_map: &mut std::collections::HashMap<std::string::String, WebGPUShaderContext>,
@@ -20,17 +20,17 @@ pub fn differed_shading_pass(
     view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
 ) {
-    // Update differed gbuffer resources
+    // Update deferred gbuffer resources
     {
-        let differed_gbuffer_shader: &WebGPUShaderContext = shader_map
-            .entry("DifferedGBuffer".to_string())
-            .or_insert_with(|| create_differed_gbuffer_shader_context(interface));
+        let deferred_gbuffer_shader: &WebGPUShaderContext = shader_map
+            .entry("DeferredGBuffer".to_string())
+            .or_insert_with(|| create_deferred_gbuffer_shader_context(interface));
 
         for scene_object in scene.objects.iter() {
             if scene_object.mesh_rendering_resource.is_some() {
-                update_differed_gbuffer_shading_resource(
+                update_deferred_gbuffer_shading_resource(
                     interface,
-                    differed_gbuffer_shader,
+                    deferred_gbuffer_shader,
                     scene,
                     scene_object,
                 );
@@ -38,37 +38,37 @@ pub fn differed_shading_pass(
         }
     }
 
-    // Initialize differed shading resources
+    // Initialize deferred shading resources
     if global_resources.diffuse_indirect_resource.is_none() {
         global_resources.diffuse_indirect_resource =
             Some(diffuse_indirect_shading::create_diffuse_indirect_resource(interface));
     }
-    if global_resources.differed_shading_resource.is_none() {
-        global_resources.differed_shading_resource =
-            Some(create_differed_shading_context(interface, global_resources));
+    if global_resources.deferred_shading_resource.is_none() {
+        global_resources.deferred_shading_resource =
+            Some(create_deferred_shading_context(interface, global_resources));
     }
 
-    // Update differed shading resources
+    // Update deferred shading resources
     {
-        update_differed_shading_buffer(
+        update_deferred_shading_buffer(
             interface,
             scene,
             global_resources.shadow_resource.as_ref().unwrap(),
-            global_resources.differed_shading_resource.as_ref().unwrap(),
+            global_resources.deferred_shading_resource.as_ref().unwrap(),
         );
     }
 
-    let dsr = global_resources.differed_shading_resource.as_ref().unwrap();
+    let dsr = global_resources.deferred_shading_resource.as_ref().unwrap();
     let indirect = global_resources.diffuse_indirect_resource.as_ref().unwrap();
 
     // Rendering pass
     {
-        // Render differed gbuffer writing pass
+        // Render deferred gbuffer writing pass
         {
             let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::BasePass);
-            let differed_gbuffer_shader_context: &WebGPUShaderContext = shader_map
-                .get("DifferedGBuffer")
-                .expect("DifferedGBuffer shader is not exist");
+            let deferred_gbuffer_shader_context: &WebGPUShaderContext = shader_map
+                .get("DeferredGBuffer")
+                .expect("DeferredGBuffer shader is not exist");
 
             const GBUFFER_CLEAR_COLORS: [wgpu::Color; 3] = [
                 wgpu::Color {
@@ -102,7 +102,7 @@ pub fn differed_shading_pass(
 
             let mut gbuffer_pass: wgpu::RenderPass<'_> =
                 command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Differed gbuffer pass"),
+                    label: Some("Deferred gbuffer pass"),
                     color_attachments: &color_attachments,
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                         view: &interface
@@ -120,7 +120,7 @@ pub fn differed_shading_pass(
                     occlusion_query_set: None,
                 });
 
-            gbuffer_pass.set_pipeline(&differed_gbuffer_shader_context.render_pipeline);
+            gbuffer_pass.set_pipeline(&deferred_gbuffer_shader_context.render_pipeline);
 
             for object in scene.objects.iter() {
                 let Some(mesh_resource) = object.mesh_rendering_resource.as_ref() else {
@@ -148,15 +148,15 @@ pub fn differed_shading_pass(
             indirect,
         );
 
-        // differed shading pass: adds direct lighting onto SceneColor written by the BasePass
+        // deferred shading pass: adds direct lighting onto SceneColor written by the BasePass
         {
             let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Lights);
-            let is_debug_out = scene.parameters.differed_debug_type != 0;
+            let is_debug_out = scene.parameters.deferred_debug_type != 0;
 
             // render pass setup
-            let mut differed_shading_pass: wgpu::RenderPass<'_> = command_encoder
+            let mut deferred_shading_pass: wgpu::RenderPass<'_> = command_encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Differed shading pass"),
+                    label: Some("Deferred shading pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view,
                         resolve_target: None,
@@ -177,17 +177,17 @@ pub fn differed_shading_pass(
             } else {
                 &dsr.render_pipeline
             };
-            differed_shading_pass.set_pipeline(pipeline);
+            deferred_shading_pass.set_pipeline(pipeline);
 
             // IBL lighting is handled by the environment pass, so only the deferred bind groups are used
             for (index, bind_group) in dsr.bind_groups.iter().take(3).enumerate() {
-                differed_shading_pass.set_bind_group(index as u32, bind_group, &[]);
+                deferred_shading_pass.set_bind_group(index as u32, bind_group, &[]);
             }
             // diffuse indirect light (rgb) and ambient occlusion (a)
-            differed_shading_pass.set_bind_group(3, &indirect.lighting_bind_group, &[]);
+            deferred_shading_pass.set_bind_group(3, &indirect.lighting_bind_group, &[]);
 
             // draw call
-            differed_shading_pass.draw(0..6, 0..1);
+            deferred_shading_pass.draw(0..6, 0..1);
         }
 
         // Keep the direct lit scene for the next frame's diffuse indirect pass
@@ -195,7 +195,7 @@ pub fn differed_shading_pass(
     }
 }
 
-// Differed shading context ---------------------------------------------------------------------------------
+// Deferred shading context ---------------------------------------------------------------------------------
 fn background_clear_color(scene: &engine::scene::Scene) -> wgpu::Color {
     wgpu::Color {
         r: scene.parameters.background_color[0] as f64,
@@ -205,7 +205,7 @@ fn background_clear_color(scene: &engine::scene::Scene) -> wgpu::Color {
     }
 }
 
-pub struct WebGPUDifferedShadingResource {
+pub struct WebGPUDeferredShadingResource {
     pub _shader: wgpu::ShaderModule,
     pub gbuffer_views: [wgpu::TextureView; 3],
     pub bind_groups: Vec<wgpu::BindGroup>,
@@ -215,7 +215,7 @@ pub struct WebGPUDifferedShadingResource {
     pub ibl_bind_group_layout: wgpu::BindGroupLayout,
 }
 
-pub fn create_differed_gbuffer_shader_context(interface: &WebGPUInterface) -> WebGPUShaderContext {
+pub fn create_deferred_gbuffer_shader_context(interface: &WebGPUInterface) -> WebGPUShaderContext {
     struct WriteGBuffersUniform {
         _model_matrix: [f32; 16],
         _view_matrix: [f32; 16],
@@ -230,7 +230,7 @@ pub fn create_differed_gbuffer_shader_context(interface: &WebGPUInterface) -> We
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../../shader/differed_write_gbuffers.wgsl"
+                    "../../shader/deferred_write_gbuffers.wgsl"
                 ))),
             });
 
@@ -406,7 +406,7 @@ entry_point: Some(common::FS_ENTRY_POINT),
             });
 
     return WebGPUShaderContext {
-        _shader_name: "DifferedGBuffer".to_string(),
+        _shader_name: "DeferredGBuffer".to_string(),
         render_pipeline,
         bind_group_layout: uniform_bind_group_layout,
         _bind_group_layout_2: Some(texture_bind_group_layout),
@@ -425,7 +425,7 @@ pub fn get_canvas_size() -> (u32, u32) {
     (canvas.client_width() as u32, canvas.client_height() as u32)
 }
 
-fn update_differed_gbuffer_shading_resource(
+fn update_deferred_gbuffer_shading_resource(
     interface: &WebGPUInterface,
     shader_context: &WebGPUShaderContext,
     scene: &engine::scene::Scene,
@@ -572,7 +572,7 @@ fn update_differed_gbuffer_shading_resource(
     }
 }
 
-struct DifferedUniform {
+struct DeferredUniform {
     _directional_light: [f32; 4],
     _ambient_light: [f32; 4],
     _camera_position: [f32; 4],
@@ -606,10 +606,10 @@ fn create_gbuffer_texture(
     })
 }
 
-fn create_differed_shading_context(
+fn create_deferred_shading_context(
     interface: &WebGPUInterface,
     global_resources: &mut WebGPUUniqueResources,
-) -> WebGPUDifferedShadingResource {
+) -> WebGPUDeferredShadingResource {
     let shader: wgpu::ShaderModule =
         interface
             .device
@@ -618,7 +618,7 @@ fn create_differed_shading_context(
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(concat!(
                     include_str!("../../shader/pbr_common.wgsl"),
                     "\n",
-                    include_str!("../../shader/differed_pbr.wgsl"),
+                    include_str!("../../shader/deferred_pbr.wgsl"),
                 ))),
             });
 
@@ -714,9 +714,9 @@ fn create_differed_shading_context(
                 label: Some("Bind group 0"),
             });
 
-    let uniform_size: u64 = std::mem::size_of::<DifferedUniform>() as u64;
+    let uniform_size: u64 = std::mem::size_of::<DeferredUniform>() as u64;
     let uniform_buf: wgpu::Buffer = interface.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Differed uniform buffer"),
+        label: Some("Deferred uniform buffer"),
         size: uniform_size,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
@@ -753,7 +753,7 @@ fn create_differed_shading_context(
     let shadow_resource = global_resources
         .shadow_resource
         .as_ref()
-        .expect("Shadow resource should be initialized before differed shading");
+        .expect("Shadow resource should be initialized before deferred shading");
 
     let shadow_bind_group_layout: wgpu::BindGroupLayout = interface
         .device
@@ -1014,7 +1014,7 @@ fn create_differed_shading_context(
 
     bind_groups.push(ibl_bind_group);
 
-    return WebGPUDifferedShadingResource {
+    return WebGPUDeferredShadingResource {
         _shader: shader,
         gbuffer_views,
         bind_groups,
@@ -1025,11 +1025,11 @@ fn create_differed_shading_context(
     };
 }
 
-fn update_differed_shading_buffer(
+fn update_deferred_shading_buffer(
     interface: &WebGPUInterface,
     scene: &engine::scene::Scene,
     shadow_resource: &crate::rendering::webgpu::shadow::WebGPUShadowResource,
-    resource: &WebGPUDifferedShadingResource,
+    resource: &WebGPUDeferredShadingResource,
 ) {
     let scene_value = scene;
 
@@ -1061,7 +1061,7 @@ fn update_differed_shading_buffer(
     uniform_total.extend_from_slice(&shadow_resource.light_view_projection.to_cols_array());
     uniform_total.extend_from_slice(&inv_view_projection.to_cols_array());
     uniform_total.extend_from_slice(&[
-        scene_value.parameters.differed_debug_type as f32,
+        scene_value.parameters.deferred_debug_type as f32,
         0.0,
         0.0,
         0.0,

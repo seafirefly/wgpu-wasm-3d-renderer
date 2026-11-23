@@ -5,7 +5,7 @@ use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE, WEBGPU_FRONT_FACE,
 };
 
-// Must match the near / far planes of the perspective projection used by forward and differed shading.
+// Must match the near / far planes of the perspective projection used by forward and deferred shading.
 const PROJECTION_NEAR: f32 = 0.01;
 const PROJECTION_FAR: f32 = 100.0;
 

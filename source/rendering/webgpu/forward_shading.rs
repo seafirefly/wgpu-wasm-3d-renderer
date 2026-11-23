@@ -46,7 +46,7 @@ pub fn forward_shading_pass(
     let scene_value = scene;
     let mut forward_shading_pass: wgpu::RenderPass<'_> =
         command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Differed shading pass"),
+            label: Some("Deferred shading pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &view,
                 resolve_target: None,

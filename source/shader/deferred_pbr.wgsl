@@ -10,7 +10,7 @@ struct Uniform
     emissive_lights       : array<EmissiveLight, MAX_EMISSIVE_LIGHTS>,
 }
 
-// basic differed (binding 0 was the position target, now rebuilt from depth)
+// basic deferred (binding 0 was the position target, now rebuilt from depth)
 @group(0) @binding(1) var t_normal        : texture_2d<f32>;
 @group(0) @binding(2) var t_depth         : texture_depth_2d;
 @group(0) @binding(3) var t_albedo        : texture_2d<f32>;
