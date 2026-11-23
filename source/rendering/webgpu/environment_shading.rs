@@ -199,7 +199,7 @@ fn create_environment_shading_resource(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: dsr.clearcoat_buf.as_entire_binding(),
+                resource: dsr.material_buf.as_entire_binding(),
             },
         ],
     });

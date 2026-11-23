@@ -26,8 +26,8 @@ const SSR_THICKNESS    : f32 = 0.05;
 @group(2) @binding(2) var s_env        : sampler;
 // lit scene color before the environment terms are added
 @group(3) @binding(0) var t_scene      : texture_2d<f32>;
-// per-material clearcoat params: x = intensity, y = roughness (indexed by GBuffer material id)
-@group(1) @binding(1) var<storage, read> clearcoat_params : array<vec4<f32>>;
+// per-material params: x = clearcoat intensity, y = clearcoat roughness, z = emissive flag (indexed by GBuffer material id)
+@group(1) @binding(1) var<storage, read> material_params : array<vec4<f32>>;
 
 // World position of the surface stored at texel, rebuilt from the depth buffer
 fn gbuffer_position(texel : vec2<i32>) -> vec3<f32>
@@ -112,7 +112,7 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
     let n_dot_v   : f32       = max(dot(normal, view), 0.0);
 
     // Clear coat: the base layer is darkened by the coat Fresnel (UE: LayerAttenuation)
-    let coat           : vec4<f32> = clearcoat_params[u32(round(mr.r * 255.0))];
+    let coat           : vec4<f32> = material_params[u32(round(mr.r * 255.0))];
     let clearcoat      : f32       = coat.x;
     let coat_roughness : f32       = clamp(coat.y, 0.045, 1.0);
     let fresnel_term   : f32       = pow(1.0 - n_dot_v, 5.0);

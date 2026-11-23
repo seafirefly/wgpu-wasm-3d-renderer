@@ -210,7 +210,7 @@ pub struct WebGPUDeferredShadingResource {
     pub gbuffer_views: [wgpu::TextureView; 3],
     pub bind_groups: Vec<wgpu::BindGroup>,
     pub uniform_buf: wgpu::Buffer,
-    pub clearcoat_buf: wgpu::Buffer,
+    pub material_buf: wgpu::Buffer,
     pub render_pipeline: wgpu::RenderPipeline,
     pub debug_pipeline: wgpu::RenderPipeline,
     pub ibl_bind_group_layout: wgpu::BindGroupLayout,
@@ -753,10 +753,10 @@ fn create_deferred_shading_context(
             ],
         });
 
-    let clearcoat_size: u64 = (engine::scene::GBUFFER_MATERIAL_CAPACITY * 16) as u64;
-    let clearcoat_buf: wgpu::Buffer = interface.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Clearcoat material buffer"),
-        size: clearcoat_size,
+    let material_size: u64 = (engine::scene::GBUFFER_MATERIAL_CAPACITY * 16) as u64;
+    let material_buf: wgpu::Buffer = interface.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Material params buffer"),
+        size: material_size,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -773,7 +773,7 @@ fn create_deferred_shading_context(
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: clearcoat_buf.as_entire_binding(),
+                        resource: material_buf.as_entire_binding(),
                     },
                 ],
                 label: Some("Bind group 1"),
@@ -1048,7 +1048,7 @@ fn create_deferred_shading_context(
         gbuffer_views,
         bind_groups,
         uniform_buf,
-        clearcoat_buf,
+        material_buf,
         render_pipeline,
         debug_pipeline,
         ibl_bind_group_layout,
@@ -1105,23 +1105,25 @@ fn update_deferred_shading_buffer(
         .queue
         .write_buffer(&resource.uniform_buf, 0, bytemuck::cast_slice(uniform_ref));
 
-    // Per-material clearcoat params, indexed by the GBuffer material id. Unused slots stay zero.
-    let mut clearcoat_params = vec![[0.0f32; 4]; engine::scene::GBUFFER_MATERIAL_CAPACITY];
-    for (slot, material) in clearcoat_params
+    // Per-material params, indexed by the GBuffer material id: x = clearcoat intensity,
+    // y = clearcoat roughness, z = emissive flag. Unused slots stay zero.
+    let mut material_params = vec![[0.0f32; 4]; engine::scene::GBUFFER_MATERIAL_CAPACITY];
+    for (slot, material) in material_params
         .iter_mut()
         .zip(scene_value.materials.iter())
         .take(engine::scene::GBUFFER_MATERIAL_ID_NONE as usize)
     {
+        let is_emissive = material.emissive_factor.iter().any(|&c| c > 0.0);
         *slot = [
             material.clearcoat_factor,
             material.clearcoat_roughness_factor,
-            0.0,
+            if is_emissive { 1.0 } else { 0.0 },
             0.0,
         ];
     }
     interface.queue.write_buffer(
-        &resource.clearcoat_buf,
+        &resource.material_buf,
         0,
-        bytemuck::cast_slice(&clearcoat_params),
+        bytemuck::cast_slice(&material_params),
     );
 }

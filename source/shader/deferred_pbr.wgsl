@@ -16,8 +16,8 @@ struct Uniform
 @group(0) @binding(3) var t_albedo        : texture_2d<f32>;
 @group(0) @binding(4) var t_metallic      : texture_2d<f32>;
 @group(1) @binding(0) var<uniform>  u_differd       : Uniform;
-// per-material clearcoat params: x = intensity, y = roughness (indexed by GBuffer material id)
-@group(1) @binding(1) var<storage, read> clearcoat_params : array<vec4<f32>>;
+// per-material params: x = clearcoat intensity, y = clearcoat roughness, z = emissive flag (indexed by GBuffer material id)
+@group(1) @binding(1) var<storage, read> material_params : array<vec4<f32>>;
 @group(2) @binding(0) var           t_shadow_map    : texture_depth_2d;
 @group(2) @binding(1) var           s_shadow_map    : sampler_comparison;
 @group(2) @binding(2) var           t_point_shadow_maps : texture_depth_2d_array;
@@ -33,7 +33,6 @@ struct GBufferTexel
   depth              : f32,
   albedo             : vec4<f32>,
   metallic_roughness : vec4<f32>,
-  is_emissive        : bool,
   material_id        : u32,
 }
 
@@ -47,6 +46,7 @@ struct Surface
   view      : vec3<f32>,
   clearcoat           : f32,
   clearcoat_roughness : f32,
+  is_emissive         : bool,
 }
 
 fn load_gbuffer(coord : vec4<f32>) -> GBufferTexel
@@ -62,14 +62,13 @@ fn load_gbuffer(coord : vec4<f32>) -> GBufferTexel
     depth,
     textureLoad(t_albedo, texel, 0),
     metallic_texel,
-    metallic_texel.a > 0.5,
     u32(round(metallic_texel.r * 255.0)),
   );
 }
 
 fn make_surface(g : GBufferTexel) -> Surface
 {
-  let coat = clearcoat_params[g.material_id];
+  let params = material_params[g.material_id];
   return Surface(
     g.position,
     safe_normalize(g.normal),
@@ -77,8 +76,9 @@ fn make_surface(g : GBufferTexel) -> Surface
     clamp(g.metallic_roughness.g, 0.045, 1.0),
     clamp(g.metallic_roughness.b, 0.0, 1.0),
     safe_normalize(u_differd.camera_position.xyz - g.position),
-    coat.x,
-    coat.y,
+    params.x,
+    params.y,
+    params.z > 0.5,
   );
 }
 
@@ -148,11 +148,11 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
 
   // emissive surfaces only show their own emission, so they are not lit by the emissive lights
   // (emissive radiance itself is already in SceneColor)
-  let area_radiance = emissive_radiance(s) * select(1.0, 0.0, g.is_emissive);
+  let area_radiance = emissive_radiance(s) * select(1.0, 0.0, s.is_emissive);
 
   // diffuse indirect light, occluded by the screen space ambient occlusion in alpha
   let indirect = textureLoad(t_diffuse_indirect, vec2<i32>(floor(coord.xy)), 0);
-  let indirect_radiance = indirect.rgb * indirect.a * select(1.0, 0.0, g.is_emissive);
+  let indirect_radiance = indirect.rgb * indirect.a * select(1.0, 0.0, s.is_emissive);
 
   return vec4<f32>(direct_radiance(s) + area_radiance + indirect_radiance, g.albedo.a);
 }
