@@ -65,11 +65,15 @@ fn apply_loaded_scene(
     engine::scene::batch_objects(scene);
     create_mesh_rendering_resources(interface, scene);
 
-    let (object_count, material_count) = {
+    let (object_count, material_count, light_count) = {
         let scene_value = scene.borrow();
-        (scene_value.objects.len(), scene_value.materials.len())
+        (
+            scene_value.objects.len(),
+            scene_value.materials.len(),
+            scene_value.emissive_lights.len(),
+        )
     };
-    frontend::control_panel::update_scene_statistics(object_count, material_count);
+    frontend::control_panel::update_scene_statistics(object_count, material_count, light_count);
 }
 
 /// Applies a finished scene load, then starts loading the model requested from the GUI (if any).

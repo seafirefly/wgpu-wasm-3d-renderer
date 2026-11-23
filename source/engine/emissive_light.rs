@@ -2,7 +2,7 @@ use crate::engine::scene::Scene;
 
 // Emissive triangles are sampled as point area lights. Keep in sync with MAX_EMISSIVE_LIGHTS in the shaders.
 pub const MAX_EMISSIVE_LIGHTS: usize = 4;
-pub const POINT_SHADOW_MAP_SIZE: u32 = 1024;
+pub const POINT_SHADOW_MAP_SIZE: u32 = 2048;
 const POINT_SHADOW_FOV_DEGREES: f32 = 160.0;
 const POINT_SHADOW_NEAR: f32 = 0.01;
 const POINT_SHADOW_FAR: f32 = 100.0;

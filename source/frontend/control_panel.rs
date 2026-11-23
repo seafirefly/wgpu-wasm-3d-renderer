@@ -132,9 +132,10 @@ pub fn update_performance_statistics(average_frame_time_ms: f64, frames_per_seco
     );
 }
 
-pub fn update_scene_statistics(objects: usize, materials: usize) {
+pub fn update_scene_statistics(objects: usize, materials: usize, lights: usize) {
     update_statistic("objects-analytics-value", &objects.to_string());
     update_statistic("materials-analytics-value", &materials.to_string());
+    update_statistic("lights-analytics-value", &lights.to_string());
 }
 
 /// Reflects the camera pose changed by user input (mouse/keyboard) into the camera sliders.
@@ -756,9 +757,13 @@ fn overlay(parent: &web_sys::Element, scene: &Shared<Scene>) {
 
 fn statistics(parent: &web_sys::Element, scene: &Shared<Scene>) {
     let content = dialog(parent, "analytics", "Statistics");
-    let (objects, materials) = {
+    let (objects, materials, lights) = {
         let scene = scene.borrow();
-        (scene.objects.len(), scene.materials.len())
+        (
+            scene.objects.len(),
+            scene.materials.len(),
+            scene.emissive_lights.len(),
+        )
     };
 
     append(
@@ -768,6 +773,10 @@ fn statistics(parent: &web_sys::Element, scene: &Shared<Scene>) {
     append(
         &content,
         &stat_row("Materials", "materials-analytics-value", materials),
+    );
+    append(
+        &content,
+        &stat_row("Lights", "lights-analytics-value", lights),
     );
 }
 

@@ -216,7 +216,19 @@ fn sample_point_light_shadow(
   let slope_bias = 0.0002 + 0.0003 * (1.0 - max(dot(normal, light_dir), 0.0));
   let shadow_depth = clamp(shadow_ndc.z - slope_bias, 0.0, 1.0);
   let layer = i32(light.normal_layer.w);
-  let shadow_sample = textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv, layer, shadow_depth);
+  let texel_size = 1.0 / max(vec2<f32>(textureDimensions(t_shadow_map)), vec2<f32>(1.0, 1.0));
+
+  // 5x5 PCF kernel, same as the directional shadow
+  let kernel_1d = array<f32, 5>(1.0, 4.0, 6.0, 4.0, 1.0);
+  var shadow_sample = 0.0;
+  for (var y = -2; y <= 2; y++) {
+    for (var x = -2; x <= 2; x++) {
+      let offset = vec2<f32>(f32(x), f32(y)) * SHADOW_FILTER_RADIUS * texel_size;
+      let weight = kernel_1d[x + 2] * kernel_1d[y + 2];
+      shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + offset, layer, shadow_depth) * weight;
+    }
+  }
+  shadow_sample /= 256.0;
 
   return 1.0 - valid_shadow + shadow_sample * valid_shadow;
 }

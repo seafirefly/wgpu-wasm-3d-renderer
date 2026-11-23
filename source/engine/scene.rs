@@ -252,7 +252,7 @@ impl SceneParameter {
             light_parameters: SceneLightParameter {
                 directional_light_angle: [-0.5, -1.0, -1.0],
                 directional_light_intensity: 0.0,
-                ambient_light_color: [0.2, 0.2, 0.2, 1.0],
+                ambient_light_color: [0.2, 0.2, 0.2, 0.05],
             },
             // scene model
             scene_model: SceneModel::default(),
