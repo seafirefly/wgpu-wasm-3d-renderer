@@ -1,6 +1,0 @@
-[build]
-target = "index.debug.html"
-dist = "distribute-debug"
-
-[serve]
-port = 9090

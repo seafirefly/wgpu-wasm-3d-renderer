@@ -1,9 +1,8 @@
 use crate::engine::constant::{
-    GLTF_CORNELL_BOX_PATH, HDR_FIREPLACE,
-    HDR_KLOOFENDAL_48D_PARTLY_CLOUDY, HDR_STUDIO_SMALL_09,
+    GLTF_CORNELL_BOX_PATH, HDR_FIREPLACE, HDR_KLOOFENDAL_48D_PARTLY_CLOUDY,
 };
 #[cfg(debug_assertions)]
-use crate::engine::constant::{GLTF_LOGO_PATH, GLTF_TORUS_PATH};
+use crate::engine::constant::{GLTF_LOGO_PATH, GLTF_TORUS_PATH, HDR_STUDIO_SMALL_09};
 use crate::types::Shared;
 use crate::{frontend, rendering};
 
@@ -150,6 +149,7 @@ impl SceneModel {
 pub enum SkyBoxType {
     #[default]
     Kloofendal48dPartlyCloudy,
+    #[cfg(debug_assertions)]
     StudioSmall09,
     Fireplace,
 }
@@ -158,6 +158,7 @@ impl SkyBoxType {
     pub fn path(self, resolution: SkyBoxResolution) -> String {
         let stem = match self {
             SkyBoxType::Kloofendal48dPartlyCloudy => HDR_KLOOFENDAL_48D_PARTLY_CLOUDY,
+            #[cfg(debug_assertions)]
             SkyBoxType::StudioSmall09 => HDR_STUDIO_SMALL_09,
             SkyBoxType::Fireplace => HDR_FIREPLACE,
         };

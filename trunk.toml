@@ -1,6 +1,7 @@
-[build]
-target = "index.html"
-dist   = "distribute"
+﻿[build]
+target = "index.debug.html"
+dist = "distribute-debug"
 
 [serve]
-port   = 9090
+port = 9090
+

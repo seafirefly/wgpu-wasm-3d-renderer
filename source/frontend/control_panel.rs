@@ -47,10 +47,18 @@ const SCENE_MODELS: [(&str, SceneModel); 3] = [
 const SCENE_MODELS: [(&str, SceneModel); 1] =
     [("cornell_box", SceneModel::CornellBox)];
 
+#[cfg(debug_assertions)]
 const SKY_BOX_OPTIONS: [(&str, Option<SkyBoxType>); 4] = [
     ("none", None),
     ("kloofendal", Some(SkyBoxType::Kloofendal48dPartlyCloudy)),
     ("studio", Some(SkyBoxType::StudioSmall09)),
+    ("fireplace", Some(SkyBoxType::Fireplace)),
+];
+
+#[cfg(not(debug_assertions))]
+const SKY_BOX_OPTIONS: [(&str, Option<SkyBoxType>); 3] = [
+    ("none", None),
+    ("kloofendal", Some(SkyBoxType::Kloofendal48dPartlyCloudy)),
     ("fireplace", Some(SkyBoxType::Fireplace)),
 ];
 

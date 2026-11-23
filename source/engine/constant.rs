@@ -12,5 +12,6 @@ pub const GLTF_LOGO_PATH: &str = "private/gltf/gltf_logo/scene.gltf";
 
 // .hdr files from Poly Haven (https://polyhaven.com/hdris), without the "_<resolution>.hdr" suffix
 pub const HDR_KLOOFENDAL_48D_PARTLY_CLOUDY: &str = "public/hdr/kloofendal_48d_partly_cloudy_puresky";
-pub const HDR_STUDIO_SMALL_09: &str = "public/hdr/studio_small_09";
+#[cfg(debug_assertions)]
+pub const HDR_STUDIO_SMALL_09: &str = "private/hdr/studio_small_09";
 pub const HDR_FIREPLACE: &str = "public/hdr/fireplace";

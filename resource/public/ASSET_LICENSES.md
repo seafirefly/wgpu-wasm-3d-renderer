@@ -10,5 +10,5 @@
 
 - Source: [Poly Haven](https://polyhaven.com/)
 - License: CC0
-- Public files: `hdr/*_1k.hdr`
-- 2K and 4K files: local-only under `resource/private/hdr/`
+- Public files: `hdr/kloofendal_48d_partly_cloudy_puresky_1k.hdr`, `hdr/fireplace_1k.hdr`
+- Local-only under `resource/private/hdr/`: `studio_small_09_1k.hdr`, all 2K and 4K files

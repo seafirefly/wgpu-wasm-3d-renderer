@@ -44,12 +44,18 @@ Only `resource/public/` is copied into the browser build. Resources in `resource
 
 ### Debug resources
 
-Public builds use `trunk build` or `trunk build --release` with `Trunk.toml`.
-
-Private debug resources are available only with:
+`trunk.toml` is the default debug configuration. It outputs to `distribute-debug/`, which includes the private debug resources and must not be published.
 
 ```sh
-trunk serve --config Trunk.debug.toml
+trunk build   # debug build -> distribute-debug/
+trunk serve   # debug server
+```
+
+The public release build is configured by `Trunk.release.toml` and outputs to `distribute/`:
+
+```sh
+trunk build --config Trunk.release.toml --release
+trunk serve --config Trunk.release.toml --release
 ```
 
 ### Cornell Box

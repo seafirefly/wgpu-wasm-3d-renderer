@@ -1,0 +1,8 @@
+﻿[build]
+target = "index.html"
+dist = "distribute"
+public_url = "/wgpu-wasm-3d-renderer/"
+
+[serve]
+port = 9090
+
