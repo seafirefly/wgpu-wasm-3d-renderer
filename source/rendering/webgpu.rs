@@ -433,6 +433,8 @@ pub fn create_mesh_rendering_resource(
             wgpu::TextureFormat::Rgba8UnormSrgb,
             &mat.base_color_texture,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            mat.base_color_texture_address_modes,
+            mat.base_color_texture_filters,
         );
 
     let (normal_texture, normal_texture_view, normal_texture_sampler) = create_and_write_texture(
@@ -443,6 +445,8 @@ pub fn create_mesh_rendering_resource(
         wgpu::TextureFormat::Rgba8Unorm,
         &mat.normal_texture,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        [0, 0],
+        [1, 1, 1],
     );
 
     let (
@@ -457,6 +461,8 @@ pub fn create_mesh_rendering_resource(
         wgpu::TextureFormat::Rgba8Unorm,
         &mat.metallic_roughness_texture,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        [0, 0],
+        [1, 1, 1],
     );
 
     return WebGPUMeshRenderingResource {
@@ -489,6 +495,8 @@ fn create_and_write_texture(
     format: wgpu::TextureFormat,
     data: &[u8],
     usage: wgpu::TextureUsages,
+    address_modes: [u8; 2],
+    filters: [u8; 3],
 ) -> (wgpu::Texture, wgpu::TextureView, wgpu::Sampler) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(label),
@@ -526,13 +534,22 @@ fn create_and_write_texture(
     );
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let address_mode = |mode: u8| match mode {
+        1 => wgpu::AddressMode::Repeat,
+        2 => wgpu::AddressMode::MirrorRepeat,
+        _ => wgpu::AddressMode::ClampToEdge,
+    };
+    let filter_mode = |filter: u8| match filter {
+        1 => wgpu::FilterMode::Linear,
+        _ => wgpu::FilterMode::Nearest,
+    };
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_u: address_mode(address_modes[0]),
+        address_mode_v: address_mode(address_modes[1]),
         address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
+        mag_filter: filter_mode(filters[0]),
+        min_filter: filter_mode(filters[1]),
+        mipmap_filter: filter_mode(filters[2]),
         ..Default::default()
     });
     (texture, view, sampler)

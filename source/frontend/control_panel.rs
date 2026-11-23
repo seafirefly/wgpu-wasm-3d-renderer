@@ -37,15 +37,18 @@ const AMBIENT_CHANNELS: [(&str, &str, &str, &str, usize); 4] = [
 ];
 
 #[cfg(debug_assertions)]
-const SCENE_MODELS: [(&str, SceneModel); 3] = [
+const SCENE_MODELS: [(&str, SceneModel); 4] = [
     ("cornell_box", SceneModel::CornellBox),
+    ("teapot", SceneModel::Teapot),
     ("torus", SceneModel::Torus),
     ("gltf_logo", SceneModel::GltfLogo),
 ];
 
 #[cfg(not(debug_assertions))]
-const SCENE_MODELS: [(&str, SceneModel); 1] =
-    [("cornell_box", SceneModel::CornellBox)];
+const SCENE_MODELS: [(&str, SceneModel); 2] = [
+    ("cornell_box", SceneModel::CornellBox),
+    ("teapot", SceneModel::Teapot),
+];
 
 #[cfg(debug_assertions)]
 const SKY_BOX_OPTIONS: [(&str, Option<SkyBoxType>); 4] = [

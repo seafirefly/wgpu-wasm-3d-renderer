@@ -5,6 +5,7 @@ pub const CANVAS_ELEMENT_ID: &str = "canvas";
 
 // scene files (.gltf)
 pub const GLTF_CORNELL_BOX_PATH: &str = "public/gltf/cornell_box/cornell_box_extended.gltf";
+pub const GLTF_TEAPOT_PATH: &str = "public/gltf/teapot/teapot_extended.gltf";
 #[cfg(debug_assertions)]
 pub const GLTF_TORUS_PATH: &str = "private/gltf/torus/torus.gltf";
 #[cfg(debug_assertions)]

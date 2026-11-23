@@ -6,6 +6,12 @@
 - License: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
 - Notice: `gltf/cornell_box/LICENSE.txt`
 
+## Teapot
+
+- Source: [Benedikt Bitterli Rendering Resources](https://benedikt-bitterli.me/resources/)
+- License: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
+- Notice: `gltf/teapot/LICENSE.txt`
+
 ## Poly Haven HDRIs
 
 - Source: [Poly Haven](https://polyhaven.com/)

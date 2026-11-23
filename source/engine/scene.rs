@@ -1,5 +1,6 @@
 use crate::engine::constant::{
-    GLTF_CORNELL_BOX_PATH, HDR_FIREPLACE, HDR_KLOOFENDAL_48D_PARTLY_CLOUDY,
+    GLTF_CORNELL_BOX_PATH, GLTF_TEAPOT_PATH, HDR_FIREPLACE,
+    HDR_KLOOFENDAL_48D_PARTLY_CLOUDY,
 };
 #[cfg(debug_assertions)]
 use crate::engine::constant::{GLTF_LOGO_PATH, GLTF_TORUS_PATH, HDR_STUDIO_SMALL_09};
@@ -51,6 +52,8 @@ pub struct SceneMaterial {
     pub _name: Option<std::string::String>,
     pub base_color_texture: Vec<u8>,
     pub base_color_texture_size: [u32; 2],
+    pub base_color_texture_address_modes: [u8; 2],
+    pub base_color_texture_filters: [u8; 3],
 
     pub normal_texture: Vec<u8>,
     pub normal_texture_size: [u32; 2],
@@ -127,6 +130,7 @@ pub struct SceneParameter {
 pub enum SceneModel {
     #[default]
     CornellBox,
+    Teapot,
     #[cfg(debug_assertions)]
     Torus,
     #[cfg(debug_assertions)]
@@ -139,6 +143,7 @@ impl SceneModel {
             #[cfg(debug_assertions)]
             SceneModel::Torus => GLTF_TORUS_PATH,
             SceneModel::CornellBox => GLTF_CORNELL_BOX_PATH,
+            SceneModel::Teapot => GLTF_TEAPOT_PATH,
             #[cfg(debug_assertions)]
             SceneModel::GltfLogo => GLTF_LOGO_PATH,
         }

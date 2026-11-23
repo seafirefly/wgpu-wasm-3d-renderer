@@ -133,6 +133,65 @@ async fn extract_texture_data(file_name: &String) -> (Vec<u8>, [u32; 2]) {
     return (out_data, out_size);
 }
 
+fn extract_embedded_texture_data(
+    view: &gltf::buffer::View<'_>,
+    mime_type: &str,
+    buffer_data: &[Vec<u8>],
+) -> (Vec<u8>, [u32; 2]) {
+    let start = view.offset();
+    let end = start + view.length();
+    let buffer = &buffer_data[view.buffer().index()];
+    let Some(encoded) = buffer.get(start..end) else {
+        return (Vec::new(), [1, 1]);
+    };
+
+    let decoded = if mime_type == "image/png" {
+        image::load_from_memory_with_format(encoded, image::ImageFormat::Png)
+    } else if mime_type == "image/bmp" {
+        image::load_from_memory_with_format(encoded, image::ImageFormat::Bmp)
+    } else {
+        image::load_from_memory(encoded)
+    };
+
+    match decoded {
+        Ok(image) => {
+            let size = [image.width(), image.height()];
+            (image.to_rgba8().to_vec(), size)
+        }
+        Err(_) => (Vec::new(), [1, 1]),
+    }
+}
+
+fn texture_sampler_settings(
+    texture_info: &gltf::texture::Info<'_>,
+) -> ([u8; 2], [u8; 3]) {
+    let sampler = texture_info.texture().sampler();
+
+    let address_mode = |mode: gltf::texture::WrappingMode| match mode {
+        gltf::texture::WrappingMode::ClampToEdge => 0,
+        gltf::texture::WrappingMode::MirroredRepeat => 2,
+        gltf::texture::WrappingMode::Repeat => 1,
+    };
+
+    let mag_filter = match sampler.mag_filter() {
+        Some(gltf::texture::MagFilter::Linear) => 1,
+        _ => 0,
+    };
+    let (min_filter, mipmap_filter) = match sampler.min_filter() {
+        Some(gltf::texture::MinFilter::Linear) => (1, 1),
+        Some(gltf::texture::MinFilter::NearestMipmapNearest) => (0, 0),
+        Some(gltf::texture::MinFilter::LinearMipmapNearest) => (1, 0),
+        Some(gltf::texture::MinFilter::NearestMipmapLinear) => (0, 1),
+        Some(gltf::texture::MinFilter::LinearMipmapLinear) => (1, 1),
+        _ => (0, 0),
+    };
+
+    (
+        [address_mode(sampler.wrap_s()), address_mode(sampler.wrap_t())],
+        [mag_filter, min_filter, mipmap_filter],
+    )
+}
+
 #[allow(dead_code)]
 fn load_4byte_to_u32(bytes: &[u8]) -> u32 {
     let out_value: u32 = ((bytes[0] as u32) << 24)
@@ -500,17 +559,21 @@ async fn get_gltf_material<'a>(
     // base color texture
     let mut base_color_texture_data: Vec<u8> = Vec::new();
     let mut base_color_texture_size: [u32; 2] = [1, 1];
+    let mut base_color_texture_address_modes = [1, 1];
+    let mut base_color_texture_filters = [1, 1, 1];
     {
         if pbr.base_color_texture().is_some() {
-            let base_color_texture_source = &pbr
+            let base_color_texture_info = pbr
                 .base_color_texture()
-                .map(|tex| tex.texture().source().source())
                 .expect("texture");
+            let base_color_texture_source = base_color_texture_info.texture().source().source();
+            (base_color_texture_address_modes, base_color_texture_filters) =
+                texture_sampler_settings(&base_color_texture_info);
 
             match base_color_texture_source {
-                gltf::image::Source::View { view, mime_type: _ } => {
-                    // embedded data is yet
-                    base_color_texture_data = buffer_data[view.buffer().index()].clone();
+                gltf::image::Source::View { view, mime_type } => {
+                    (base_color_texture_data, base_color_texture_size) =
+                        extract_embedded_texture_data(&view, mime_type, buffer_data);
                 }
                 gltf::image::Source::Uri { uri, mime_type: _ } => {
                     // from url
@@ -536,9 +599,9 @@ async fn get_gltf_material<'a>(
                 .source()
                 .source();
             match normal_source {
-                gltf::image::Source::View { view, mime_type: _ } => {
-                    // embedded data is yet
-                    normal_texture_data = buffer_data[view.buffer().index()].clone();
+                gltf::image::Source::View { view, mime_type } => {
+                    (normal_texture_data, normal_texture_size) =
+                        extract_embedded_texture_data(&view, *mime_type, buffer_data);
                 }
                 gltf::image::Source::Uri { uri, mime_type: _ } => {
                     // from url
@@ -565,9 +628,9 @@ async fn get_gltf_material<'a>(
                 .expect("texture");
 
             match metal_texture_source {
-                gltf::image::Source::View { view, mime_type: _ } => {
-                    // embedded data is yet
-                    metallic_roughness_texture_data = buffer_data[view.buffer().index()].clone();
+                gltf::image::Source::View { view, mime_type } => {
+                    (metallic_roughness_texture_data, metallic_roughness_texture_size) =
+                        extract_embedded_texture_data(&view, *mime_type, buffer_data);
                 }
                 gltf::image::Source::Uri { uri, mime_type: _ } => {
                     // from url
@@ -627,9 +690,9 @@ async fn get_gltf_material<'a>(
                     .expect("Should have diffuse texture");
 
                 match diffuse_texture_source {
-                    gltf::image::Source::View { view, mime_type: _ } => {
-                        // embedded data is yet
-                        base_color_texture_data = buffer_data[view.buffer().index()].clone();
+                    gltf::image::Source::View { view, mime_type } => {
+                        (base_color_texture_data, base_color_texture_size) =
+                            extract_embedded_texture_data(&view, *mime_type, buffer_data);
                     }
                     gltf::image::Source::Uri { uri, mime_type: _ } => {
                         // from url
@@ -669,6 +732,8 @@ async fn get_gltf_material<'a>(
         _name: Some(material.name().unwrap().to_string()),
         base_color_texture: base_color_texture_data,
         base_color_texture_size: base_color_texture_size,
+        base_color_texture_address_modes,
+        base_color_texture_filters,
         normal_texture: normal_texture_data,
         normal_texture_size: normal_texture_size,
         metallic_roughness_texture: metallic_roughness_texture_data,

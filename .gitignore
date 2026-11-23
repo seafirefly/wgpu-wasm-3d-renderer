@@ -1,5 +1,6 @@
 /target
 /distribute-debug
+/resource/public/gltf/teapot
 /resource/private/*
 !/resource/private/.gitkeep
 /.vscode
