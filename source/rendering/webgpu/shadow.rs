@@ -15,6 +15,8 @@ pub struct WebGPUShadowResource {
     pub render_pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub light_view_projection: glam::Mat4,
+    // last computed directional light matrix and the inputs it was computed from
+    pub light_view_cache: Option<(LightViewKey, glam::Mat4)>,
     // emissive light shadow maps: one layer per light
     pub _point_shadow_texture: wgpu::Texture,
     pub point_shadow_array_view: wgpu::TextureView,
@@ -35,7 +37,11 @@ pub fn shadow_pass(
     }
 
     let shadow_resource = global_resources.shadow_resource.as_mut().unwrap();
-    shadow_resource.light_view_projection = compute_light_view_projection(scene);
+    if scene.parameters.light_parameters.directional_light_intensity <= 0.0 {
+        return;
+    }
+    let light_view_projection = cached_light_view_projection(scene, shadow_resource);
+    shadow_resource.light_view_projection = light_view_projection;
 
     let shadow_view = shadow_resource
         .shadow_texture
@@ -219,6 +225,7 @@ fn create_shadow_resource(interface: &WebGPUInterface) -> WebGPUShadowResource {
         render_pipeline,
         bind_group_layout,
         light_view_projection: glam::Mat4::IDENTITY,
+        light_view_cache: None,
         _point_shadow_texture: point_shadow_texture,
         point_shadow_array_view,
         point_shadow_layer_views,
@@ -387,6 +394,86 @@ fn update_shadow_mesh_resource(
     );
 }
 
+fn visit_shadow_world_points(
+    scene: &engine::scene::Scene,
+    mut visit: impl FnMut(glam::Vec3, bool),
+) {
+    let eye = scene.parameters.eye_location;
+    let camera_forward = scene.parameters.eye_direction.normalize_or_zero();
+
+    for object in scene.objects.iter() {
+        let Some(source_mesh) = object.source_mesh.as_ref() else {
+            continue;
+        };
+
+        let mut model_matrix = glam::Mat4::from_cols_array_2d(&object.world_transform);
+        if scene.parameters.is_convert_y_to_z {
+            let y_to_z_mat = glam::Mat4::from_axis_angle(glam::Vec3::X, std::f32::consts::PI / 2.0);
+            model_matrix = y_to_z_mat * model_matrix;
+        }
+
+        for vertex in source_mesh.borrow().vertices.iter() {
+            let world_position = (model_matrix * glam::Vec4::from_array(vertex._pos)).truncate();
+            let to_point = world_position - eye;
+            let distance = to_point.length();
+            let view_alignment = if distance > 0.0001 {
+                to_point / distance
+            } else {
+                camera_forward
+            };
+            let visible = distance <= SHADOW_CAMERA_MAX_DISTANCE
+                && camera_forward.dot(view_alignment) >= SHADOW_CAMERA_BACKWARD_MARGIN;
+            visit(world_position, visible);
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub struct LightViewKey {
+    eye_location: [f32; 3],
+    eye_direction: [f32; 3],
+    directional_light_angle: [f32; 3],
+    is_convert_y_to_z: bool,
+    objects: Vec<([[f32; 4]; 4], Option<usize>)>,
+}
+
+impl LightViewKey {
+    fn new(scene: &engine::scene::Scene) -> Self {
+        Self {
+            eye_location: scene.parameters.eye_location.to_array(),
+            eye_direction: scene.parameters.eye_direction.to_array(),
+            directional_light_angle: scene.parameters.light_parameters.directional_light_angle,
+            is_convert_y_to_z: scene.parameters.is_convert_y_to_z,
+            objects: scene
+                .objects
+                .iter()
+                .map(|object| {
+                    let mesh_id = object
+                        .source_mesh
+                        .as_ref()
+                        .map(|mesh| std::rc::Rc::as_ptr(mesh) as usize);
+                    (object.world_transform, mesh_id)
+                })
+                .collect(),
+        }
+    }
+}
+
+fn cached_light_view_projection(
+    scene: &engine::scene::Scene,
+    shadow_resource: &mut WebGPUShadowResource,
+) -> glam::Mat4 {
+    let key = LightViewKey::new(scene);
+    if let Some((cached_key, matrix)) = &shadow_resource.light_view_cache {
+        if *cached_key == key {
+            return *matrix;
+        }
+    }
+    let matrix = compute_light_view_projection(scene);
+    shadow_resource.light_view_cache = Some((key, matrix));
+    matrix
+}
+
 pub fn compute_light_view_projection(scene: &engine::scene::Scene) -> glam::Mat4 {
     let scene_value = scene;
     let mut directional = glam::Vec3::from_array(
@@ -401,59 +488,26 @@ pub fn compute_light_view_projection(scene: &engine::scene::Scene) -> glam::Mat4
         directional = glam::Vec3::new(-0.5, -1.0, -1.0).normalize();
     }
 
-    let eye = scene_value.parameters.eye_location;
-    let camera_forward = scene_value.parameters.eye_direction.normalize_or_zero();
-    let mut world_points_visible: Vec<glam::Vec3> = Vec::new();
-    let mut world_points_all: Vec<glam::Vec3> = Vec::new();
+    let mut point_count = 0usize;
+    let mut has_visible = false;
+    visit_shadow_world_points(scene_value, |_, visible| {
+        point_count += 1;
+        has_visible |= visible;
+    });
 
-    for object in scene_value.objects.iter() {
-        let source_mesh = match object.source_mesh.as_ref() {
-            Some(source_mesh) => source_mesh,
-            None => continue,
-        };
-
-        let mut model_matrix = glam::Mat4::from_cols_array_2d(&object.world_transform);
-        if scene_value.parameters.is_convert_y_to_z {
-            let y_to_z_mat = glam::Mat4::from_axis_angle(glam::Vec3::X, std::f32::consts::PI / 2.0);
-            model_matrix = y_to_z_mat * model_matrix;
-        }
-
-        for vertex in source_mesh.borrow().vertices.iter() {
-            let world_position = model_matrix * glam::Vec4::from_array(vertex._pos);
-            let world_position = world_position.truncate();
-            let to_point = world_position - eye;
-            let distance = to_point.length();
-            let view_alignment = if distance > 0.0001 {
-                to_point / distance
-            } else {
-                camera_forward
-            };
-
-            world_points_all.push(world_position);
-            if distance <= SHADOW_CAMERA_MAX_DISTANCE
-                && camera_forward.dot(view_alignment) >= SHADOW_CAMERA_BACKWARD_MARGIN
-            {
-                world_points_visible.push(world_position);
-            }
-        }
-    }
-
-    let world_points = if world_points_visible.is_empty() {
-        world_points_all
-    } else {
-        world_points_visible
-    };
-
-    if world_points.is_empty() {
+    if point_count == 0 {
         return glam::Mat4::IDENTITY;
     }
 
     let mut bounds_min = glam::Vec3::splat(f32::INFINITY);
     let mut bounds_max = glam::Vec3::splat(f32::NEG_INFINITY);
-    for point in world_points.iter() {
-        bounds_min = bounds_min.min(*point);
-        bounds_max = bounds_max.max(*point);
-    }
+    visit_shadow_world_points(scene_value, |point, visible| {
+        if has_visible && !visible {
+            return;
+        }
+        bounds_min = bounds_min.min(point);
+        bounds_max = bounds_max.max(point);
+    });
 
     let center = (bounds_min + bounds_max) * 0.5;
     let radius = (bounds_max - bounds_min).length().max(1.0) * 0.5;
@@ -468,11 +522,14 @@ pub fn compute_light_view_projection(scene: &engine::scene::Scene) -> glam::Mat4
 
     let mut light_min = glam::Vec3::splat(f32::INFINITY);
     let mut light_max = glam::Vec3::splat(f32::NEG_INFINITY);
-    for point in world_points.iter() {
-        let light_space_point = light_view.transform_point3(*point);
+    visit_shadow_world_points(scene_value, |point, visible| {
+        if has_visible && !visible {
+            return;
+        }
+        let light_space_point = light_view.transform_point3(point);
         light_min = light_min.min(light_space_point);
         light_max = light_max.max(light_space_point);
-    }
+    });
 
     let xy_padding = 0.5;
     let z_padding = 5.0;
